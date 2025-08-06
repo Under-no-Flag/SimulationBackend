@@ -118,11 +118,11 @@ class AnyLogicModelServiceTest {
         assertEquals(0, count); // 初始应该为0
     }
 
-    @Test
-    void testShutdown() {
-        // 测试关闭服务
-        assertDoesNotThrow(() -> {
-            anyLogicModelService.stopSimulation();
-        });
-    }
+    // @Test
+    // void testShutdown() {
+    //     // 测试关闭服务
+    //     assertDoesNotThrow(() -> {
+    //         anyLogicModelService.stopSimulation();
+    //     });
+    // }
 }

@@ -96,7 +96,7 @@ Pedestrian destination: leave
 1. 创建MySQL数据库，创建数据库的脚本在`docs/simulationpeds.sql`
 
 2. 编译、运行项目
-```git 
+```cmd
 .\mvnw.cmd clean compile
 .\mvnw.cmd spring-boot:run
 ```
