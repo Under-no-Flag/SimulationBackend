@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.4</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>com.simulation</groupId>
+    <artifactId>demo</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>demo</name>
+    <description>Demo project for Spring Boot</description>
+    <url/>
+    <licenses>
+        <license/>
+    </licenses>
+    <developers>
+        <developer/>
+    </developers>
+    <scm>
+        <connection/>
+        <developerConnection/>
+        <tag/>
+        <url/>
+    </scm>
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+    <dependencies>
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+            <exclusions>
+                <!-- 排除默认的日志实现 -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- 使用 log4j2 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-log4j2</artifactId>
+        </dependency>
+
+        <!-- MySQL Driver -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.33</version>
+        </dependency>
+
+        <!-- Validation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Test Dependencies -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- H2 Database for testing -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- 注意：AnyLogic 依赖通过 additionalClasspathElements 加载，不在这里声明 -->
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 添加额外的classpath元素 -->
+                    <additionalClasspathElements>
+                        <!-- 模型和核心引擎 -->
+                        <additionalClasspathElement>${project.basedir}/model.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.sa.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/Core.jar</additionalClasspathElement>
+
+                        <!-- AnyLogic 相关库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.datautil.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.editorapi.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.generalization.jar</additionalClasspathElement>
+
+                        <!-- 数据库驱动 -->
+                        <additionalClasspathElement>${project.basedir}/lib/mariadb-java-client-3.2.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/hsqldb-2.7.1.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/jtds-1.3.1.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/mssql-jdbc-11.2.3.jre11.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/ojdbc11-23.2.0.0.jar</additionalClasspathElement>
+
+                        <!-- Apache POI 库 (必需) -->
+                        <additionalClasspathElement>${project.basedir}/lib/poi-5.2.5.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/poi-ooxml-5.2.5.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/poi-ooxml-lite-5.2.5.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/poi-scratchpad-5.2.5.jar</additionalClasspathElement>
+
+                        <!-- XML 处理库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/xmlbeans-5.2.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/jakarta.xml.bind-api-2.3.3.jar</additionalClasspathElement>
+
+                        <!-- JTS 几何库 (行人仿真必需) -->
+                        <additionalClasspathElement>${project.basedir}/lib/jts-core-1.16.0.jar</additionalClasspathElement>
+
+                        <!-- Commons 库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/commons-collections4-4.4.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/commons-compress-1.25.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/curvesapi-1.08.jar</additionalClasspathElement>
+
+                        <!-- 数学和工具库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/commons-math3-3.6.1.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/joml-1.10.6.jar</additionalClasspathElement>
+
+                        <!-- 其他必需的库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/PedestrianLibrary.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/ProcessModelingLibrary.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/LevelSystem.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/NavigationMesh.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/MarkupDescriptors.jar</additionalClasspathElement>
+
+                        <!-- QueryDSL 库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/querydsl-core-5.0.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/querydsl-sql-5.0.0.jar</additionalClasspathElement>
+
+                        <!-- 其他工具库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/commons-lang3-3.9.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/commons-io-2.15.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/slf4j-api-1.7.25.jar</additionalClasspathElement>
+                    </additionalClasspathElements>
+                </configuration>
+            </plugin>
+
+            <!-- Maven Surefire Plugin - 用于测试时加载依赖 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.1.2</version>
+                <configuration>
+                    <!-- 使用 argLine 直接设置类路径，模拟命令行行为 -->
+                    <argLine>-cp "${project.basedir}/model.jar;${project.basedir}/lib/*"</argLine>
+                    <additionalClasspathElements>
+                        <!-- 模型和核心引擎 -->
+                        <additionalClasspathElement>${project.basedir}/model.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.sa.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/Core.jar</additionalClasspathElement>
+
+                        <!-- AnyLogic 相关库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.datautil.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.editorapi.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.generalization.jar</additionalClasspathElement>
+
+                        <!-- 数据库驱动 -->
+                        <additionalClasspathElement>${project.basedir}/lib/mariadb-java-client-3.2.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/hsqldb-2.7.1.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/jtds-1.3.1.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/mssql-jdbc-11.2.3.jre11.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/ojdbc11-23.2.0.0.jar</additionalClasspathElement>
+
+                        <!-- Apache POI 库 (必需) -->
+                        <additionalClasspathElement>${project.basedir}/lib/poi-5.2.5.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/poi-ooxml-5.2.5.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/poi-ooxml-lite-5.2.5.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/poi-scratchpad-5.2.5.jar</additionalClasspathElement>
+
+                        <!-- XML 处理库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/xmlbeans-5.2.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/jakarta.xml.bind-api-2.3.3.jar</additionalClasspathElement>
+
+                        <!-- JTS 几何库 (行人仿真必需) -->
+                        <additionalClasspathElement>${project.basedir}/lib/jts-core-1.16.0.jar</additionalClasspathElement>
+
+                        <!-- Commons 库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/commons-collections4-4.4.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/commons-compress-1.25.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/curvesapi-1.08.jar</additionalClasspathElement>
+
+                        <!-- 数学和工具库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/commons-math3-3.6.1.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/joml-1.10.6.jar</additionalClasspathElement>
+
+                        <!-- 其他必需的库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/PedestrianLibrary.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/ProcessModelingLibrary.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/LevelSystem.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/NavigationMesh.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/MarkupDescriptors.jar</additionalClasspathElement>
+
+                        <!-- QueryDSL 库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/querydsl-core-5.0.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/querydsl-sql-5.0.0.jar</additionalClasspathElement>
+
+                        <!-- 其他工具库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/commons-lang3-3.9.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/commons-io-2.15.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/slf4j-api-1.7.25.jar</additionalClasspathElement>
+                    </additionalClasspathElements>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
