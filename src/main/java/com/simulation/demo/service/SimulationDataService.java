@@ -22,18 +22,18 @@ import java.util.Optional;
 
 @Service
 public class SimulationDataService {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(SimulationDataService.class);
-    
+
     @Autowired
     private SimulationRunRepository simulationRunRepository;
-    
+
     @Autowired
     private PedestrianDataRepository pedestrianDataRepository;
-    
+
     @Autowired
     private EventsLogRepository eventsLogRepository;
-    
+
     /**
      * 获取所有模拟运行记录
      */
@@ -41,7 +41,7 @@ public class SimulationDataService {
         logger.info("获取所有模拟运行记录");
         return simulationRunRepository.findAll(Sort.by(Sort.Direction.DESC, "startDate"));
     }
-    
+
     /**
      * 根据ID获取模拟运行记录
      */
@@ -49,7 +49,7 @@ public class SimulationDataService {
         logger.info("获取模拟运行记录，ID: {}", runId);
         return simulationRunRepository.findById(runId);
     }
-    
+
     /**
      * 获取指定时间范围内的模拟运行记录
      */
@@ -57,7 +57,7 @@ public class SimulationDataService {
         logger.info("获取时间范围内的模拟运行记录: {} - {}", startDate, endDate);
         return simulationRunRepository.findByDateRange(startDate, endDate);
     }
-    
+
     /**
      * 获取指定运行的行人数据（分页）
      */
@@ -66,7 +66,7 @@ public class SimulationDataService {
         Pageable pageable = PageRequest.of(page, size, Sort.by("simTime"));
         return pedestrianDataRepository.findByRunId(runId, pageable);
     }
-    
+
     /**
      * 获取指定运行和行人ID的数据
      */
@@ -74,7 +74,7 @@ public class SimulationDataService {
         logger.info("获取特定行人数据，运行ID: {}, 行人ID: {}", runId, pedestrianId);
         return pedestrianDataRepository.findByRunIdAndPedestrianId(runId, pedestrianId);
     }
-    
+
     /**
      * 获取指定时间范围内的行人数据
      */
@@ -82,7 +82,7 @@ public class SimulationDataService {
         logger.info("获取时间范围内的行人数据，运行ID: {}, 时间范围: {} - {}", runId, startTime, endTime);
         return pedestrianDataRepository.findByRunIdAndTimeRange(runId, startTime, endTime);
     }
-    
+
     /**
      * 获取指定区域的行人数据
      */
@@ -90,7 +90,7 @@ public class SimulationDataService {
         logger.info("获取区域行人数据，运行ID: {}, 区域: {}", runId, areaName);
         return pedestrianDataRepository.findByRunIdAndAreaName(runId, areaName);
     }
-    
+
     /**
      * 统计指定运行中的行人数量
      */
@@ -98,7 +98,7 @@ public class SimulationDataService {
         logger.info("统计行人数量，运行ID: {}", runId);
         return pedestrianDataRepository.countDistinctPedestriansByRunId(runId);
     }
-    
+
     /**
      * 获取指定运行的事件日志
      */
@@ -106,7 +106,7 @@ public class SimulationDataService {
         logger.info("获取事件日志，运行ID: {}", runId);
         return eventsLogRepository.findByRunId(runId);
     }
-    
+
     /**
      * 根据事件类型获取事件日志
      */
@@ -114,7 +114,7 @@ public class SimulationDataService {
         logger.info("获取特定类型事件日志，运行ID: {}, 事件类型: {}", runId, eventType);
         return eventsLogRepository.findByRunIdAndEventType(runId, eventType);
     }
-    
+
     /**
      * 获取指定行人的事件日志
      */
@@ -122,7 +122,7 @@ public class SimulationDataService {
         logger.info("获取特定行人事件日志，运行ID: {}, 行人ID: {}", runId, pedestrianId);
         return eventsLogRepository.findByRunIdAndPedestrianId(runId, pedestrianId);
     }
-    
+
     /**
      * 获取指定时间范围内的事件日志
      */
@@ -130,7 +130,7 @@ public class SimulationDataService {
         logger.info("获取时间范围内的事件日志，运行ID: {}, 时间范围: {} - {}", runId, startTime, endTime);
         return eventsLogRepository.findByRunIdAndTimeRange(runId, startTime, endTime);
     }
-    
+
     /**
      * 统计事件类型数量
      */
@@ -138,7 +138,7 @@ public class SimulationDataService {
         logger.info("统计事件类型数量，运行ID: {}", runId);
         return eventsLogRepository.countEventTypesByRunId(runId);
     }
-    
+
     /**
      * 保存行人数据
      */
@@ -146,7 +146,7 @@ public class SimulationDataService {
         logger.debug("保存行人数据: {}", pedestrianData.getId());
         return pedestrianDataRepository.save(pedestrianData);
     }
-    
+
     /**
      * 批量保存行人数据
      */
@@ -154,7 +154,7 @@ public class SimulationDataService {
         logger.info("批量保存行人数据，数量: {}", pedestrianDataList.size());
         return pedestrianDataRepository.saveAll(pedestrianDataList);
     }
-    
+
     /**
      * 保存事件日志
      */
@@ -162,7 +162,7 @@ public class SimulationDataService {
         logger.debug("保存事件日志: {}", eventsLog.getEventId());
         return eventsLogRepository.save(eventsLog);
     }
-    
+
     /**
      * 批量保存事件日志
      */

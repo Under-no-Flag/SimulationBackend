@@ -88,8 +88,8 @@ public class SimulationController {
         try {
             int runningCount = anyLogicModelService.getRunningSimulationCount();
             boolean modelExists = anyLogicModelService.isModelFileExists();
-            
-            return ResponseEntity.ok(new ApiResponse(true, "获取状态成功", 
+
+            return ResponseEntity.ok(new ApiResponse(true, "获取状态成功",
                 new SimulationStatusInfo(runningCount, modelExists)));
         } catch (Exception e) {
             logger.error("获取仿真状态失败", e);

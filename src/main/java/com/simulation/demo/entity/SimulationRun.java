@@ -38,6 +38,9 @@ public class SimulationRun {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "model_port")
+    private Integer modelPort;
+
         // 修改关联关系，添加 @JsonIgnoreProperties
     @OneToMany(mappedBy = "simulationRun", fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "simulationRun"})
@@ -111,5 +114,29 @@ public class SimulationRun {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public Integer getModelPort() {
+        return modelPort;
+    }
+
+    public void setModelPort(Integer modelPort) {
+        this.modelPort = modelPort;
+    }
+
+    public List<PedestrianData> getPedestrianDataList() {
+        return pedestrianDataList;
+    }
+
+    public void setPedestrianDataList(List<PedestrianData> pedestrianDataList) {
+        this.pedestrianDataList = pedestrianDataList;
+    }
+
+    public List<EventsLog> getEventsLogList() {
+        return eventsLogList;
+    }
+
+    public void setEventsLogList(List<EventsLog> eventsLogList) {
+        this.eventsLogList = eventsLogList;
     }
 }

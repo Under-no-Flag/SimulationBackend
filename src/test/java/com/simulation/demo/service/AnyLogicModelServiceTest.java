@@ -122,7 +122,7 @@ class AnyLogicModelServiceTest {
     void testShutdown() {
         // 测试关闭服务
         assertDoesNotThrow(() -> {
-            anyLogicModelService.shutdown();
+            anyLogicModelService.stopSimulation();
         });
     }
 }

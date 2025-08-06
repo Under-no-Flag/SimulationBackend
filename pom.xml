@@ -110,7 +110,69 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- 注意：AnyLogic 依赖通过 additionalClasspathElements 加载，不在这里声明 -->
+        <!-- AnyLogic 系统依赖 - 编译时可用 -->
+        <dependency>
+            <groupId>com.anylogic</groupId>
+            <artifactId>engine</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/com.anylogic.engine.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>com.anylogic</groupId>
+            <artifactId>engine-sa</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/com.anylogic.engine.sa.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>com.anylogic</groupId>
+            <artifactId>core</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/Core.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>nanjingdong</groupId>
+            <artifactId>model</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/model.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>com.anylogic</groupId>
+            <artifactId>engine-sa-web</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/sa/com.anylogic.engine.sa.web.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>com.anylogic</groupId>
+            <artifactId>engine-datautil</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/com.anylogic.engine.datautil.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>com.anylogic</groupId>
+            <artifactId>engine-generalization</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/com.anylogic.engine.generalization.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>com.anylogic</groupId>
+            <artifactId>engine-editorapi</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/com.anylogic.engine.editorapi.jar</systemPath>
+        </dependency>
     </dependencies>
 
     <build>
@@ -132,6 +194,37 @@
                         <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.datautil.jar</additionalClasspathElement>
                         <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.editorapi.jar</additionalClasspathElement>
                         <additionalClasspathElement>${project.basedir}/lib/com.anylogic.engine.generalization.jar</additionalClasspathElement>
+
+                        <!-- AnyLogic SA (Standalone Application) 库 -->
+                        <additionalClasspathElement>${project.basedir}/lib/sa/com.anylogic.engine.sa.web.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/executor-basic-8.3.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/ioutil-8.3.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/util-8.3.jar</additionalClasspathElement>
+
+                        <!-- Jackson 库 (AnyLogic SA 使用) -->
+                        <additionalClasspathElement>${project.basedir}/lib/sa/jackson/jackson-annotations-2.14.3.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/jackson/jackson-core-2.14.3.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/jackson/jackson-databind-2.14.3.jar</additionalClasspathElement>
+
+                        <!-- Spark 和 Jetty 库 (AnyLogic SA Web服务器) -->
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/javax.servlet-api-3.1.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-client-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-http-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-io-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-security-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-server-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-servlet-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-servlets-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-util-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-util-ajax-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-webapp-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/jetty-xml-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/spark-core-2.9.4-AL.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/websocket-api-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/websocket-client-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/websocket-common-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/websocket-server-9.4.51.v20230217.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/sa/spark/websocket-servlet-9.4.51.v20230217.jar</additionalClasspathElement>
 
                         <!-- 数据库驱动 -->
                         <additionalClasspathElement>${project.basedir}/lib/mariadb-java-client-3.2.0.jar</additionalClasspathElement>
@@ -178,6 +271,17 @@
                         <additionalClasspathElement>${project.basedir}/lib/commons-io-2.15.0.jar</additionalClasspathElement>
                         <additionalClasspathElement>${project.basedir}/lib/slf4j-api-1.7.25.jar</additionalClasspathElement>
                     </additionalClasspathElements>
+                </configuration>
+            </plugin>
+
+            <!-- Maven Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.14.0</version>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
                 </configuration>
             </plugin>
 
