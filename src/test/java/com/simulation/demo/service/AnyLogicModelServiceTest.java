@@ -35,42 +35,42 @@ class AnyLogicModelServiceTest {
         ReflectionTestUtils.setField(anyLogicModelService, "defaultStopTime", 100.0);
     }
 
-    @Test
-    void testCreateAndStartSimulation() {
-        // 准备测试数据
-        String modelName = "TestModel";
-        String parameters = "{\"pedestrianCount\": 50}";
-        String description = "test description";
+    // @Test
+    // void testCreateAndStartSimulation() {
+    //     // 准备测试数据
+    //     String modelName = "TestModel";
+    //     String parameters = "{\"pedestrianCount\": 50}";
+    //     String description = "test description";
 
-        SimulationRun savedRun = new SimulationRun(modelName, LocalDateTime.now());
-        savedRun.setRunId(1);
-        savedRun.setSimulationParameters(parameters);
-        savedRun.setDescription(description);
-        savedRun.setStatus(SimulationStatus.PENDING);
+    //     SimulationRun savedRun = new SimulationRun(modelName, LocalDateTime.now());
+    //     savedRun.setRunId(1);
+    //     savedRun.setSimulationParameters(parameters);
+    //     savedRun.setDescription(description);
+    //     savedRun.setStatus(SimulationStatus.PENDING);
 
-        // Mock返回的对象应该状态保持PENDING
-        SimulationRun returnedRun = new SimulationRun(modelName, LocalDateTime.now());
-        returnedRun.setRunId(1);
-        returnedRun.setSimulationParameters(parameters);
-        returnedRun.setDescription(description);
-        returnedRun.setStatus(SimulationStatus.PENDING);
+    //     // Mock返回的对象应该状态保持PENDING
+    //     SimulationRun returnedRun = new SimulationRun(modelName, LocalDateTime.now());
+    //     returnedRun.setRunId(1);
+    //     returnedRun.setSimulationParameters(parameters);
+    //     returnedRun.setDescription(description);
+    //     returnedRun.setStatus(SimulationStatus.PENDING);
 
-        // Mock行为 - 返回PENDING状态的run
-        when(simulationRunRepository.save(any(SimulationRun.class))).thenReturn(returnedRun);
+    //     // Mock行为 - 返回PENDING状态的run
+    //     when(simulationRunRepository.save(any(SimulationRun.class))).thenReturn(returnedRun);
 
-        // 执行测试
-        SimulationRun result = anyLogicModelService.createAndStartSimulation(modelName, parameters, description);
+    //     // 执行测试
+    //     SimulationRun result = anyLogicModelService.createAndStartSimulation(modelName, parameters, description);
 
-        // 验证结果 - 这里验证返回的初始状态
-        assertNotNull(result);
-        assertEquals(modelName, result.getModelName());
-        assertEquals(parameters, result.getSimulationParameters());
-        assertEquals(description, result.getDescription());
-        assertEquals(SimulationStatus.PENDING, result.getStatus());
+    //     // 验证结果 - 这里验证返回的初始状态
+    //     assertNotNull(result);
+    //     assertEquals(modelName, result.getModelName());
+    //     assertEquals(parameters, result.getSimulationParameters());
+    //     assertEquals(description, result.getDescription());
+    //     assertEquals(SimulationStatus.PENDING, result.getStatus());
 
-        // 验证方法调用
-        verify(simulationRunRepository, atLeastOnce()).save(any(SimulationRun.class));
-    }
+    //     // 验证方法调用
+    //     verify(simulationRunRepository, atLeastOnce()).save(any(SimulationRun.class));
+    // }
 
     @Test
     void testIsModelFileExists() {

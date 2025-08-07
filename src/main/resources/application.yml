@@ -37,3 +37,12 @@ anylogic:
     dataset: "dataset/selected_cameras_20250531.xlsx"
   simulation:
     stoptime: 3600  # 默认仿真时间（秒）
+
+# 仿真服务配置
+simulation:
+  timeout:
+    minutes: 30  # 仿真超时时间（分钟）
+  max:
+    concurrent: 3  # 最大并发仿真数量
+  web:
+    enabled: true  # 是否启用Web服务器（设为false禁用浏览器弹出）

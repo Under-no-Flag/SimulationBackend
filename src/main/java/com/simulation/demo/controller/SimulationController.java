@@ -9,9 +9,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -41,9 +43,24 @@ public class SimulationController {
                     .body(new ApiResponse(false, "模型文件不存在", null));
             }
 
+            // 将引擎参数Map转换为JSON字符串
+            String engineParametersJson = null;
+            if (request.getEngineParameters() != null && !request.getEngineParameters().isEmpty()) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                engineParametersJson = objectMapper.writeValueAsString(request.getEngineParameters());
+            }
+
+            // 将智能体参数Map转换为JSON字符串
+            String agentParametersJson = null;
+            if (request.getAgentParameters() != null && !request.getAgentParameters().isEmpty()) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                agentParametersJson = objectMapper.writeValueAsString(request.getAgentParameters());
+            }
+
             SimulationRun simulationRun = anyLogicModelService.createAndStartSimulation(
                 request.getModelName(),
-                request.getParameters(),
+                engineParametersJson,
+                agentParametersJson,
                 request.getDescription()
             );
 
@@ -95,6 +112,30 @@ public class SimulationController {
             logger.error("获取仿真状态失败", e);
             return ResponseEntity.internalServerError()
                 .body(new ApiResponse(false, "获取状态失败: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * 获取仿真服务健康状态
+     */
+    @GetMapping("/health")
+    public ResponseEntity<?> getServiceHealth() {
+        logger.info("获取仿真服务健康状态");
+
+        try {
+            Map<String, Object> healthStatus = anyLogicModelService.getServiceHealthStatus();
+            boolean isHealthy = (Boolean) healthStatus.getOrDefault("isHealthy", false);
+            
+            if (isHealthy) {
+                return ResponseEntity.ok(new ApiResponse(true, "服务健康", healthStatus));
+            } else {
+                return ResponseEntity.status(503)
+                    .body(new ApiResponse(false, "服务不健康", healthStatus));
+            }
+        } catch (Exception e) {
+            logger.error("获取服务健康状态失败", e);
+            return ResponseEntity.status(503)
+                .body(new ApiResponse(false, "健康检查失败: " + e.getMessage(), null));
         }
     }
 
@@ -160,7 +201,8 @@ public class SimulationController {
     // 内部类：启动模拟请求
     public static class SimulationStartRequest {
         private String modelName;
-        private String parameters;
+        private Map<String, Object> engineParameters;  // 引擎参数
+        private Map<String, Object> agentParameters;   // 智能体参数
         private String description;
 
         // Getters and setters
@@ -172,12 +214,20 @@ public class SimulationController {
             this.modelName = modelName;
         }
 
-        public String getParameters() {
-            return parameters;
+        public Map<String, Object> getEngineParameters() {
+            return engineParameters;
         }
 
-        public void setParameters(String parameters) {
-            this.parameters = parameters;
+        public void setEngineParameters(Map<String, Object> engineParameters) {
+            this.engineParameters = engineParameters;
+        }
+
+        public Map<String, Object> getAgentParameters() {
+            return agentParameters;
+        }
+
+        public void setAgentParameters(Map<String, Object> agentParameters) {
+            this.agentParameters = agentParameters;
         }
 
         public String getDescription() {

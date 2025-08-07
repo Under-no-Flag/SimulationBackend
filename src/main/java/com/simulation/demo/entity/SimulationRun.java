@@ -31,6 +31,12 @@ public class SimulationRun {
     @Column(name = "simulation_parameters", columnDefinition = "TEXT")
     private String simulationParameters;
 
+    @Column(name = "engine_parameters", columnDefinition = "TEXT")
+    private String engineParameters;
+
+    @Column(name = "agent_parameters", columnDefinition = "TEXT")
+    private String agentParameters;
+
     @Convert(converter = SimulationStatusConverter.class)
     @Column(name = "status")
     private SimulationStatus status;
@@ -98,6 +104,22 @@ public class SimulationRun {
 
     public void setSimulationParameters(String simulationParameters) {
         this.simulationParameters = simulationParameters;
+    }
+
+    public String getEngineParameters() {
+        return engineParameters;
+    }
+
+    public void setEngineParameters(String engineParameters) {
+        this.engineParameters = engineParameters;
+    }
+
+    public String getAgentParameters() {
+        return agentParameters;
+    }
+
+    public void setAgentParameters(String agentParameters) {
+        this.agentParameters = agentParameters;
     }
 
     public SimulationStatus getStatus() {
