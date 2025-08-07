@@ -60,3 +60,16 @@ simulation:
     avoid-close-method: true   # 避免使用close方法
     wait-time: 3000           # 等待时间（毫秒）
     flush-cache: true         # 清理缓存
+
+# 坐标转换配置
+coordinate:
+  conversion:
+    scheduled:
+      enabled: true  # 启用自动坐标转换
+
+# JVM内存配置
+jvm:
+  memory:
+    max-heap: 49152m
+    initial-heap: 1024m
+    options: "-Xmx49152m -Xms1024m"

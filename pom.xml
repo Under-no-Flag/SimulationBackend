@@ -28,6 +28,11 @@
     </scm>
     <properties>
         <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- JVM内存设置 -->
+        <argLine>-Xmx49152m -Xms1024m</argLine>
     </properties>
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -307,8 +312,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.1.2</version>
                 <configuration>
-                    <!-- 使用 argLine 直接设置类路径，模拟命令行行为 -->
-                    <argLine>-cp "${project.basedir}/model.jar;${project.basedir}/lib/*"</argLine>
+                    <!-- 使用 argLine 直接设置类路径和内存参数 -->
+                    <argLine>-Xmx49152m -Xms1024m -cp "${project.basedir}/model.jar;${project.basedir}/lib/*"</argLine>
                     <additionalClasspathElements>
                         <!-- 模型和核心引擎 -->
                         <additionalClasspathElement>${project.basedir}/model.jar</additionalClasspathElement>

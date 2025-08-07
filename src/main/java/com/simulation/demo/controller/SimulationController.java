@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -199,17 +200,56 @@ public class SimulationController {
     /**
      * 测试线程池配置修复效果
      */
-    @GetMapping("/test-thread-pool")
-    public ResponseEntity<?> testThreadPoolConfiguration() {
-        logger.info("测试线程池配置修复效果");
+    // @GetMapping("/test-thread-pool")
+    // public ResponseEntity<?> testThreadPoolConfiguration() {
+    //     logger.info("测试线程池配置修复效果");
+
+    //     try {
+    //         Map<String, Object> testResult = anyLogicModelService.testThreadPoolConfiguration();
+    //         return ResponseEntity.ok(new ApiResponse(true, "线程池配置测试完成", testResult));
+    //     } catch (Exception e) {
+    //         logger.error("测试线程池配置失败", e);
+    //         return ResponseEntity.internalServerError()
+    //             .body(new ApiResponse(false, "测试线程池配置失败: " + e.getMessage(), null));
+    //     }
+    // }
+
+    /**
+     * 获取系统资源状态（包括内存使用情况）
+     */
+    @GetMapping("/system-resources")
+    public ResponseEntity<?> getSystemResources() {
+        logger.info("获取系统资源状态");
 
         try {
-            Map<String, Object> testResult = anyLogicModelService.testThreadPoolConfiguration();
-            return ResponseEntity.ok(new ApiResponse(true, "线程池配置测试完成", testResult));
+            AnyLogicModelService.SystemResourceStatus status = anyLogicModelService.getSystemResourceStatus();
+
+            // 添加JVM参数信息
+            Map<String, Object> result = new HashMap<>();
+            result.put("memory", Map.of(
+                "maxMemoryMB", status.maxMemoryMB,
+                "usedMemoryMB", status.usedMemoryMB,
+                "freeMemoryMB", status.freeMemoryMB,
+                "memoryUsagePercent", Math.round(status.memoryUsage * 100 * 100.0) / 100.0
+            ));
+            result.put("threads", status.activeThreads);
+            result.put("simulations", status.runningSimulations);
+            result.put("jvmOptions", System.getProperty("java.vm.args", "未设置"));
+            result.put("maxHeapSize", Runtime.getRuntime().maxMemory() / (1024 * 1024) + "MB");
+
+            // 添加内存设置验证信息
+            result.put("memorySettings", Map.of(
+                "configuredMaxHeap", "49152MB",
+                "configuredInitialHeap", "1024MB",
+                "actualMaxHeap", Runtime.getRuntime().maxMemory() / (1024 * 1024) + "MB",
+                "isMemorySettingEffective", Runtime.getRuntime().maxMemory() >= 49152L * 1024 * 1024
+            ));
+
+            return ResponseEntity.ok(new ApiResponse(true, "获取系统资源状态成功", result));
         } catch (Exception e) {
-            logger.error("测试线程池配置失败", e);
+            logger.error("获取系统资源状态失败", e);
             return ResponseEntity.internalServerError()
-                .body(new ApiResponse(false, "测试线程池配置失败: " + e.getMessage(), null));
+                .body(new ApiResponse(false, "获取系统资源状态失败: " + e.getMessage(), null));
         }
     }
 

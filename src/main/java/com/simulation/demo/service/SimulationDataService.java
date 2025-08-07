@@ -170,4 +170,29 @@ public class SimulationDataService {
         logger.info("批量保存事件日志，数量: {}", eventsLogList.size());
         return eventsLogRepository.saveAll(eventsLogList);
     }
+
+
+    /**
+     * 根据运行ID和仿真时间查询行人数据
+     */
+    public List<PedestrianData> getPedestrianDataByRunIdAndSimTime(Integer runId, BigDecimal simTime) {
+        logger.info("获取指定仿真时间的行人数据，运行ID: {}, 仿真时间: {}", runId, simTime);
+        return pedestrianDataRepository.findByRunIdAndSimTime(runId, simTime);
+    }
+
+    /**
+     * 获取没有经纬度信息的行人数据
+     */
+    public List<PedestrianData> getPedestrianDataWithoutLatLon() {
+        logger.info("获取没有经纬度信息的行人数据");
+        return pedestrianDataRepository.findByLatIsNullOrLonIsNull();
+    }
+
+    /**
+     * 批量更新行人数据的经纬度信息
+     */
+    public void updatePedestrianDataLatLon(List<PedestrianData> pedestrianDataList) {
+        logger.info("批量更新行人数据经纬度信息，数量: {}", pedestrianDataList.size());
+        pedestrianDataRepository.saveAll(pedestrianDataList);
+    }
 }
