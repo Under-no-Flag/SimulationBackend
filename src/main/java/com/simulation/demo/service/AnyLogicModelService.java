@@ -6,7 +6,7 @@ import com.anylogic.engine.gui.IExperimentHost;
 import nanjingdong.Simulation;
 
 import com.simulation.demo.entity.SimulationRun;
-import com.simulation.demo.entity.SimulationStatus;
+import com.anylogic.engine.Experiment;
 import com.simulation.demo.repository.SimulationRunRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +58,13 @@ public class AnyLogicModelService {
     @Value("${simulation.web.enabled:false}")
     private boolean webServerEnabled;
 
-    // 线程池管理 - 使用守护线程防止JVM关闭
+    // 添加全局仿真实例管理
+    private volatile Simulation globalSimulation = null;
+    private volatile Object globalExperimentHost = null;
+    private volatile boolean isGlobalSimulationInitialized = false;
+    private final Object simulationLock = new Object();
+
+    // 线程池管理 - 使用非守护线程防止JVM关闭时被强制终止
     private final ExecutorService simulationExecutor = Executors.newFixedThreadPool(5, new ThreadFactory() {
         private final AtomicInteger threadNumber = new AtomicInteger(1);
 
@@ -75,7 +81,7 @@ public class AnyLogicModelService {
                 }
                 r.run();
             }, "SimulationWorker-" + threadNumber.getAndIncrement());
-            t.setDaemon(true); // 设置为守护线程
+            t.setDaemon(false); // 改为非守护线程，防止JVM关闭时被强制终止
             t.setUncaughtExceptionHandler((thread, exception) -> {
                 logger.error("仿真线程 {} 发生未捕获异常: {}", thread.getName(), exception.getMessage(), exception);
                 // 不让异常传播到主线程
@@ -97,8 +103,18 @@ public class AnyLogicModelService {
 
         // 注册JVM关闭钩子，确保在应用程序关闭时清理仿真资源
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            logger.info("应用程序关闭，开始清理仿真资源...");
-            shutdownGracefully();
+            logger.info("检测到JVM关闭信号，开始清理仿真资源...");
+            try {
+                // 检查是否是AnyLogic界面关闭导致的JVM关闭
+                if (isAnyLogicInterfaceClose()) {
+                    handleAnyLogicInterfaceClose();
+                } else {
+                    // 真正的应用程序关闭
+                    cleanupSimulationResources();
+                }
+            } catch (Exception e) {
+                logger.error("清理仿真资源时发生异常: {}", e.getMessage(), e);
+            }
         }, "SimulationCleanupHook"));
     }
 
@@ -118,10 +134,107 @@ public class AnyLogicModelService {
             // 禁用显示相关的系统属性
             System.setProperty("java.awt.graphicsenv", "java.awt.GraphicsEnvironment");
 
+            // 添加更多AnyLogic特定的无界面配置
+            System.setProperty("anylogic.headless", "true");
+            System.setProperty("anylogic.no.gui", "true");
+            System.setProperty("anylogic.no.browser", "true");
+            System.setProperty("anylogic.web.server.only", "true");
+            System.setProperty("anylogic.no.experiment.gui", "true");
+            System.setProperty("anylogic.no.simulation.gui", "true");
+
             logger.info("✓ AnyLogic无界面模式配置完成");
 
         } catch (Exception e) {
             logger.warn("配置无界面模式时发生异常: {}", e.getMessage());
+        }
+    }
+
+        /**
+     * 清理仿真资源但不关闭应用
+     */
+    private void cleanupSimulationResources() {
+        logger.info("开始清理仿真资源...");
+
+        try {
+            // 停止所有运行中的仿真
+            for (Integer runId : new java.util.ArrayList<>(runningSimulations.keySet())) {
+                try {
+                    logger.info("正在停止仿真 run_id={}", runId);
+                    // stopSimulation(runId);
+                } catch (Exception e) {
+                    logger.error("停止仿真失败 run_id={}: {}", runId, e.getMessage());
+                }
+            }
+
+            // 清理资源但不关闭线程池
+            runningSimulations.clear();
+            activeExperiments.clear();
+
+            logger.info("仿真资源清理完成");
+
+        } catch (Exception e) {
+            logger.error("清理仿真资源时发生异常: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 检测AnyLogic界面关闭并处理
+     */
+    private void handleAnyLogicInterfaceClose() {
+        logger.info("检测到AnyLogic界面关闭，但保持后端服务运行...");
+
+        try {
+            // 只清理仿真资源，不关闭整个应用
+            // cleanupSimulationResources();
+
+            // 重新初始化线程池（如果需要）
+            if (simulationExecutor.isShutdown()) {
+                logger.info("线程池已关闭，重新初始化...");
+                // 注意：这里不能直接重新创建ExecutorService，因为它是final的
+                // 在实际应用中，可以考虑使用可重新初始化的线程池
+            }
+
+            logger.info("AnyLogic界面关闭处理完成，后端服务继续运行");
+
+        } catch (Exception e) {
+            logger.error("处理AnyLogic界面关闭时发生异常: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 检测是否是AnyLogic界面关闭导致的JVM关闭
+     */
+    private boolean isAnyLogicInterfaceClose() {
+        try {
+            // 检查是否有运行中的仿真
+            boolean hasRunningSimulations = !runningSimulations.isEmpty();
+
+            // 检查线程池状态
+            boolean threadPoolActive = !simulationExecutor.isShutdown();
+
+            // 检查是否有AnyLogic相关的线程
+            Thread[] threads = new Thread[Thread.activeCount()];
+            Thread.enumerate(threads);
+            boolean hasAnyLogicThreads = false;
+
+            for (Thread thread : threads) {
+                if (thread != null && thread.getName().contains("AnyLogic")) {
+                    hasAnyLogicThreads = true;
+                    break;
+                }
+            }
+
+            // 如果还有运行中的仿真但线程池仍然活跃，可能是界面关闭
+            if (hasRunningSimulations && threadPoolActive && !hasAnyLogicThreads) {
+                logger.info("检测到可能是AnyLogic界面关闭");
+                return true;
+            }
+
+            return false;
+
+        } catch (Exception e) {
+            logger.warn("检测AnyLogic界面关闭状态时发生异常: {}", e.getMessage());
+            return false;
         }
     }
 
@@ -157,7 +270,7 @@ public class AnyLogicModelService {
             SimulationRun simulationRun = new SimulationRun();
             simulationRun.setModelName("NanJingDong");
             simulationRun.setStartDate(LocalDateTime.now());
-            simulationRun.setStatus(SimulationStatus.RUNNING);
+            simulationRun.setState(Experiment.State.RUNNING);
             simulationRun = simulationRunRepository.save(simulationRun);
 
             Integer runId = simulationRun.getRunId();
@@ -181,15 +294,17 @@ public class AnyLogicModelService {
                 .exceptionally(throwable -> {
                     if (throwable instanceof TimeoutException) {
                         logger.error("仿真超时 run_id={}", runId);
-                        updateSimulationStatus(runId, SimulationStatus.FAILED);
+                        updateSimulationState(runId, Experiment.State.ERROR);
                     } else {
                         logger.error("仿真失败 run_id={}: {}", runId, throwable.getMessage());
-                        updateSimulationStatus(runId, SimulationStatus.FAILED);
+                        updateSimulationState(runId, Experiment.State.ERROR);
                     }
                     return null;
                 })
                 .thenRun(() -> {
                     logger.info("仿真完成，清理资源 run_id={}", runId);
+                    resetSimulation(globalSimulation, runId);
+                    stopSimulation(globalSimulation, runId);
                     runningSimulations.remove(runId);
                     activeExperiments.remove(runId);
                 });
@@ -240,7 +355,7 @@ public class AnyLogicModelService {
             SimulationRun simulationRun = new SimulationRun();
             simulationRun.setModelName(modelName != null ? modelName : "NanJingDong");
             simulationRun.setStartDate(LocalDateTime.now());
-            simulationRun.setStatus(SimulationStatus.PENDING);
+            simulationRun.setState(Experiment.State.IDLE);
             simulationRun.setEngineParameters(engineParametersJson);
             simulationRun.setAgentParameters(agentParametersJson);
             simulationRun.setDescription(description);
@@ -253,7 +368,7 @@ public class AnyLogicModelService {
             startSimulationAsync(runId);
 
             // 更新状态为运行中
-            simulationRun.setStatus(SimulationStatus.RUNNING);
+            simulationRun.setState(Experiment.State.RUNNING);
             return simulationRunRepository.save(simulationRun);
 
         } catch (Exception e) {
@@ -286,10 +401,10 @@ public class AnyLogicModelService {
             .exceptionally(throwable -> {
                 if (throwable instanceof TimeoutException) {
                     logger.error("仿真超时 run_id={}", runId);
-                    updateSimulationStatus(runId, SimulationStatus.FAILED);
+                    updateSimulationState(runId, Experiment.State.ERROR);
                 } else {
                     logger.error("仿真失败 run_id={}: {}", runId, throwable.getMessage());
-                    updateSimulationStatus(runId, SimulationStatus.FAILED);
+                    updateSimulationState(runId, Experiment.State.ERROR);
                 }
                 return null;
             })
@@ -314,7 +429,7 @@ public class AnyLogicModelService {
             SimulationRun simulationRun = simulationRunRepository.findById(runId).orElse(null);
             if (simulationRun == null) {
                 logger.error("找不到仿真运行记录 run_id={}", runId);
-                updateSimulationStatus(runId, SimulationStatus.FAILED);
+                updateSimulationState(runId, Experiment.State.ERROR);
                 return null;
             }
 
@@ -325,20 +440,54 @@ public class AnyLogicModelService {
             logger.info("获取到仿真参数 run_id={}, engineParams={}, agentParams={}",
                        runId, engineParametersJson, agentParametersJson);
 
-            // 2. 创建仿真实例
-            logger.info("正在创建 Simulation 实例...");
-            Simulation experiment = new Simulation();
+            // 2. 获取或创建全局仿真实例
+            logger.info("=== 获取全局仿真实例 ===");
+            Simulation experiment = getOrCreateGlobalSimulation();
             activeExperiments.put(runId, experiment);
-            logger.info("✓ Simulation 实例创建成功");
+            logger.info("✓ 获取全局仿真实例成功");
 
-            // 3. 应用引擎参数（在创建智能体之前）
+            // 状态检查与管理逻辑优化
+            synchronized (simulationLock) {
+                Experiment.State state = globalSimulation.getState();
+                logger.info("当前仿真状态: {}", state.name());
+                if (state == Experiment.State.RUNNING || state == Experiment.State.PAUSED || state == Experiment.State.PLEASE_WAIT) {
+                    logger.info("仿真处于{}状态，先reset", state.name());
+                    resetSimulation(globalSimulation, runId);
+                }
+                // 只有IDLE、FINISHED、ERROR才允许启动
+                if (state != Experiment.State.IDLE && state != Experiment.State.FINISHED && state != Experiment.State.ERROR) {
+                    throw new IllegalStateException("仿真状态异常，无法启动新仿真: " + state.name());
+                }
+            }
+
+            // 3. 检查仿真状态，如果正在运行则重置
+            // if (isSimulationRunning(experiment)) { // This line is removed as per the new logic
+            //     logger.info("检测到仿真正在运行，执行重置 run_id={}", runId);
+            //     resetSimulation(experiment, runId);
+            //     pauseSimulation(experiment, runId);
+            // }
+
+            // 4. 应用引擎参数（在创建智能体之前）
             logger.info("=== 应用引擎参数 ===");
             applyEngineParameters(experiment, engineParametersJson);
 
-            // 4. 创建顶层智能体（通过step()方法）
-            logger.info("=== 创建顶层智能体 ===");
-            experiment.step();
-            logger.info("✓ 顶层智能体创建成功");
+            // 5. 确保顶层智能体存在
+            logger.info("=== 检查顶层智能体 ===");
+            try {
+                // 尝试获取根对象，如果不存在则创建
+                Object root = experiment.getEngine().getRoot();
+                if (root == null) {
+                    logger.info("顶层智能体不存在，创建新的顶层智能体");
+                    experiment.step();
+                    logger.info("✓ 顶层智能体创建成功");
+                } else {
+                    logger.info("✓ 顶层智能体已存在");
+                }
+            } catch (Exception e) {
+                logger.info("创建顶层智能体时发生异常，重新创建: {}", e.getMessage());
+                experiment.step();
+                logger.info("✓ 顶层智能体重新创建成功");
+            }
 
             // 5. 应用智能体参数（在智能体创建之后）
             logger.info("=== 应用智能体参数 ===");
@@ -347,7 +496,7 @@ public class AnyLogicModelService {
             // 6. 根据配置决定是否获取模型端口号
             if (webServerEnabled) {
                 logger.info("=== 获取模型端口号 ===");
-                int port = getModelPort(experiment);
+                int port = 12345;
                 if (port > 0) {
                     logger.info("✓✓✓ 最终获取到的端口号: {} ✓✓✓", port);
                     updateSimulationPort(runId, port);
@@ -390,7 +539,7 @@ public class AnyLogicModelService {
                 } catch (Exception e) {
                     Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
                     threadLogger.error("仿真运行异常 run_id={}: {}", runId, e.getMessage(), e);
-                    updateSimulationStatus(runId, SimulationStatus.FAILED);
+                    updateSimulationState(runId, Experiment.State.ERROR);
                 } finally {
                     currentThread.setName(originalName);
                     Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
@@ -399,7 +548,7 @@ public class AnyLogicModelService {
             }, simulationExecutor).exceptionally(throwable -> {
                 Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
                 threadLogger.error("仿真执行出现严重错误 run_id={}: {}", runId, throwable.getMessage(), throwable);
-                updateSimulationStatus(runId, SimulationStatus.FAILED);
+                updateSimulationState(runId, Experiment.State.ERROR);
                 return null;
             });
 
@@ -407,20 +556,21 @@ public class AnyLogicModelService {
             try {
                 simulationRunFuture.get(30, TimeUnit.SECONDS); // 等待30秒
                 logger.info("仿真任务完成 run_id={}", runId);
-                updateSimulationStatus(runId, SimulationStatus.COMPLETED);
+                updateSimulationState(runId, Experiment.State.FINISHED);
+                stopSimulation(experiment,runId);
             } catch (TimeoutException e) {
                 logger.warn("仿真任务超时 run_id={}", runId);
-                updateSimulationStatus(runId, SimulationStatus.FAILED);
+                updateSimulationState(runId, Experiment.State.ERROR);
             } catch (Exception e) {
                 logger.error("仿真任务异常 run_id={}: {}", runId, e.getMessage(), e);
-                updateSimulationStatus(runId, SimulationStatus.FAILED);
+                updateSimulationState(runId, Experiment.State.ERROR);
             }
 
             return experiment;
 
         } catch (Exception e) {
             logger.error("仿真线程执行失败 run_id={}: {}", runId, e.getMessage(), e);
-            updateSimulationStatus(runId, SimulationStatus.FAILED);
+            updateSimulationState(runId, Experiment.State.ERROR);
             return null;
         }
     }
@@ -442,8 +592,268 @@ public class AnyLogicModelService {
     }
 
     /**
-     * 运行无界面仿真
-     * 注意：参数已经在runSimulationInThread中应用过了，这里只需要运行仿真
+     * 获取或创建全局仿真实例
+     */
+    private Simulation getOrCreateGlobalSimulation() {
+        synchronized (simulationLock) {
+            if (globalSimulation == null || !isGlobalSimulationInitialized) {
+                try {
+                    logger.info("创建全局仿真实例...");
+
+                    // // 配置无界面模式
+                    // configureHeadlessMode();
+
+                    // 创建仿真实例
+                    globalSimulation = new Simulation();
+                    logger.info("✓ 全局仿真实例创建成功");
+
+                    // 初始化ExperimentHost
+                    initializeGlobalExperimentHost();
+
+                    isGlobalSimulationInitialized = true;
+                    logger.info("✓ 全局仿真初始化完成");
+
+                } catch (Exception e) {
+                    logger.error("创建全局仿真实例失败: {}", e.getMessage(), e);
+                    // throw new SimulationException("创建全局仿真实例失败", e);
+                }
+            }
+            return globalSimulation;
+        }
+    }
+
+    /**
+     * 初始化全局ExperimentHost
+     */
+    private void initializeGlobalExperimentHost() {
+        try {
+            // 创建ExperimentHost实例
+            // Class<?> experimentHostClass = Class.forName("com.anylogic.engine.gui.ExperimentHost");
+            // Constructor<?> constructor = experimentHostClass.getDeclaredConstructor();
+            // constructor.setAccessible(true);
+            globalExperimentHost = (IExperimentHost)new ExperimentHost(globalSimulation);
+            globalSimulation.setup((IExperimentHost)globalExperimentHost);
+            ((IExperimentHost)globalExperimentHost).launch();
+            // globalExperimentHos
+            // 配置ExperimentHost
+            configureExperimentHost(globalExperimentHost);
+
+            logger.info("✓ 全局ExperimentHost初始化完成");
+
+        } catch (Exception e) {
+            logger.error("初始化全局ExperimentHost失败: {}", e.getMessage(), e);
+            // throw new SimulationException("初始化全局ExperimentHost失败", e);
+        }
+    }
+
+    /**
+     * 配置ExperimentHost
+     */
+    private void configureExperimentHost(Object experimentHost) {
+        try {
+            // 浏览器启动
+
+            // 设置其他配置
+            Method setWebServerEnabledMethod = experimentHost.getClass().getMethod("setWebServerEnabled", boolean.class);
+            setWebServerEnabledMethod.invoke(experimentHost, webServerEnabled);
+
+            logger.info("✓ ExperimentHost配置完成");
+
+        } catch (Exception e) {
+            logger.warn("配置ExperimentHost时发生异常: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 重置仿真到初始状态
+     */
+    private void resetSimulation(Simulation simulation, Integer runId) {
+        try {
+            logger.info("重置仿真到初始状态 run_id={}", runId);
+
+            // 停止当前仿真
+            try {
+                Method stopMethod = simulation.getClass().getMethod("stop");
+                stopMethod.invoke(simulation);
+                logger.info("✓ 停止当前仿真 run_id={}", runId);
+            } catch (Exception e) {
+                logger.debug("停止仿真时发生异常: {}", e.getMessage());
+            }
+
+            // 重置仿真
+            try {
+                Method resetMethod = simulation.getClass().getMethod("reset");
+                resetMethod.invoke(simulation);
+                logger.info("✓ 重置仿真完成 run_id={}", runId);
+            } catch (Exception e) {
+                logger.error("重置仿真失败: {}", e.getMessage(), e);
+                throw new SimulationException("重置仿真失败", e);
+            }
+
+            // 等待重置完成
+            Thread.sleep(1000);
+
+        } catch (Exception e) {
+            logger.error("重置仿真时发生异常 run_id={}: {}", runId, e.getMessage(), e);
+            // throw new SimulationException("重置仿真失败", e);
+        }
+    }
+
+    /**
+     * 暂停仿真
+     */
+    private void pauseSimulation(Simulation simulation, Integer runId) {
+        try {
+            logger.info("暂停仿真 run_id={}", runId);
+
+            Method pauseMethod = simulation.getClass().getMethod("pause");
+            pauseMethod.invoke(simulation);
+            logger.info("✓ 仿真已暂停 run_id={}", runId);
+
+        } catch (Exception e) {
+            logger.warn("暂停仿真时发生异常 run_id={}: {}", runId, e.getMessage());
+        }
+    }
+
+    /**
+     * 恢复仿真
+     */
+    private void resumeSimulation(Simulation simulation, Integer runId) {
+        try {
+            logger.info("恢复仿真 run_id={}", runId);
+
+            Method resumeMethod = simulation.getClass().getMethod("resume");
+            resumeMethod.invoke(simulation);
+            logger.info("✓ 仿真已恢复 run_id={}", runId);
+
+        } catch (Exception e) {
+            logger.warn("恢复仿真时发生异常 run_id={}: {}", runId, e.getMessage());
+        }
+    }
+
+    /**
+     * 检查仿真是否正在运行
+     */
+    private boolean isSimulationRunning(Simulation simulation) {
+        try {
+            Object state = simulation.getState();
+            return state != null && !state.toString().equals("FINISHED") && !state.toString().equals("STOPPED");
+        } catch (Exception e) {
+            logger.debug("检查仿真状态时发生异常: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 安全清理仿真资源（仅在必要时）
+     */
+    private void safeCleanupSimulationResources(Simulation experiment, Integer runId) {
+        try {
+            logger.info("开始安全清理仿真资源 run_id={}", runId);
+
+            // 1. 使用Engine.finish()方法安全终止模型
+            try {
+                if (experiment != null) {
+                    // 获取引擎对象
+                    Object engine = experiment.getEngine();
+                    if (engine != null) {
+                        // 使用Engine.finish()方法安全终止模型
+                        try {
+                            Method finishMethod = engine.getClass().getMethod("finish");
+                            boolean finished = (Boolean) finishMethod.invoke(engine);
+                            logger.info("✓ 成功调用引擎finish方法 run_id={}, result={}", runId, finished);
+                        } catch (Exception e) {
+                            logger.debug("无法调用引擎finish方法 run_id={}: {}", runId, e.getMessage());
+                        }
+                    }
+
+                    // 尝试调用实验stop方法（不使用close方法）
+                    try {
+                        Method stopMethod = experiment.getClass().getMethod("stop");
+                        stopMethod.invoke(experiment);
+                        logger.info("✓ 成功调用实验stop方法 run_id={}", runId);
+                    } catch (Exception e) {
+                        logger.debug("无法调用实验stop方法 run_id={}: {}", runId, e.getMessage());
+                    }
+
+                    // 明确不使用close方法，因为它会销毁模型并可能影响JVM
+                    logger.info("✓ 跳过close方法调用，避免销毁模型和影响JVM run_id={}", runId);
+                }
+            } catch (Exception e) {
+                logger.warn("停止实验时发生异常 run_id={}: {}", runId, e.getMessage());
+            }
+
+            // 2. 等待一段时间让资源释放
+            try {
+                Thread.sleep(3000); // 增加等待时间
+                logger.info("✓ 等待资源释放完成 run_id={}", runId);
+            } catch (InterruptedException e) {
+                logger.warn("等待资源释放时被中断 run_id={}", runId);
+                Thread.currentThread().interrupt();
+            }
+
+            // 3. 清理缓存和内存
+            try {
+                // 清理快照缓存
+                if (experiment != null) {
+                    Object engine = experiment.getEngine();
+                    if (engine != null) {
+                        try {
+                            Method flushCacheMethod = engine.getClass().getMethod("flushSnapshotCache");
+                            flushCacheMethod.invoke(engine);
+                            logger.info("✓ 清理快照缓存完成 run_id={}", runId);
+                        } catch (Exception e) {
+                            logger.debug("无法清理快照缓存 run_id={}: {}", runId, e.getMessage());
+                        }
+                    }
+                }
+
+                // 建议垃圾回收
+                System.gc();
+                logger.info("✓ 建议垃圾回收完成 run_id={}", runId);
+            } catch (Exception e) {
+                logger.warn("清理缓存时发生异常 run_id={}: {}", runId, e.getMessage());
+            }
+
+            logger.info("仿真资源安全清理完成 run_id={}", runId);
+
+        } catch (Exception e) {
+            logger.error("安全清理仿真资源时发生异常 run_id={}: {}", runId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 添加实验执行监听器
+     */
+    private void addExperimentExecutionListener(Simulation experiment, Integer runId) {
+        try {
+            // 添加执行监听器来监听实验状态
+            Method addListenerMethod = experiment.getClass().getMethod("addExecutionListener",
+                Class.forName("com.anylogic.engine.ExperimentExecutionListener"));
+
+            // 创建监听器实例
+            Object listener = java.lang.reflect.Proxy.newProxyInstance(
+                experiment.getClass().getClassLoader(),
+                new Class<?>[] { Class.forName("com.anylogic.engine.ExperimentExecutionListener") },
+                (proxy, method, args) -> {
+                    if ("onExecutionFinished".equals(method.getName())) {
+                        logger.info("实验执行完成监听器触发 run_id={}", runId);
+                        // 在这里可以添加自定义的清理逻辑
+                    }
+                    return null;
+                }
+            );
+
+            addListenerMethod.invoke(experiment, listener);
+            logger.info("✓ 成功添加实验执行监听器 run_id={}", runId);
+
+        } catch (Exception e) {
+            logger.debug("无法添加实验执行监听器 run_id={}: {}", runId, e.getMessage());
+        }
+    }
+
+    /**
+     * 运行无界面仿真 - 改进版本，集成LongRunSimulation的控制逻辑
      */
     private void runHeadlessSimulation(Simulation experiment, Integer runId) {
         try {
@@ -465,59 +875,59 @@ public class AnyLogicModelService {
 
             logger.info("启动无界面仿真 run_id={}", runId);
 
+            // 获取引擎对象
+            Object engine = experiment.getEngine();
+            if (engine != null) {
+                logger.info("获取到引擎对象: {}", engine.getClass().getName());
+
+                // 设置引擎参数（参考LongRunSimulation）
+                try {
+                    // 设置实时模式
+                    Method setRealTimeModeMethod = engine.getClass().getMethod("setRealTimeMode", boolean.class);
+                    setRealTimeModeMethod.invoke(engine, false); // 设置为非实时模式
+                    logger.info("✓ 设置引擎实时模式: false");
+                } catch (Exception e) {
+                    logger.debug("无法设置实时模式: {}", e.getMessage());
+                }
+
+                // 设置时间缩放
+                try {
+                    Method setRealTimeScaleMethod = engine.getClass().getMethod("setRealTimeScale", double.class);
+                    setRealTimeScaleMethod.invoke(engine, 1000.0); // 设置时间缩放
+                    logger.info("✓ 设置引擎时间缩放: 1000.0");
+                } catch (Exception e) {
+                    logger.debug("无法设置时间缩放: {}", e.getMessage());
+                }
+            }
+
             // 启动仿真
+            logger.info("开始运行仿真...");
             experiment.run();
 
-            // 监控仿真状态，等待仿真完成
+            // 替换原有的仿真状态监控循环
+            int checkCount = 0;
             boolean simulationFinished = false;
-            while (!simulationFinished) {
-                try {
-                    // 检查仿真状态
-                    Object state = experiment.getState();
-                    logger.info("当前仿真状态: {} (run_id={})", state, runId);
-
-                    // 获取仿真时间
-                    try {
-                        java.lang.reflect.Method getTimeMethod = experiment.getClass().getMethod("getRunTimeSeconds");
-                        if (getTimeMethod != null) {
-                            double simTime = (Double) getTimeMethod.invoke(experiment);
-                            logger.info("当前仿真时间: {} 秒 (run_id={})", simTime, runId);
-                        }
-                    } catch (Exception e) {
-                        // 忽略反射错误，尝试其他方法获取时间
-                        try {
-                            double simTime = experiment.time();
-                            logger.info("当前仿真时间: {} 秒 (run_id={})", simTime, runId);
-                        } catch (Exception ex) {
-                            // 忽略时间获取错误
-                        }
-                    }
-
-                    // 检查仿真是否完成
-                    if (state != null && state.toString().equals("FINISHED")) {
-                        logger.info("仿真已完成 run_id={}", runId);
-                        simulationFinished = true;
-                        break;
-                    }
-
-                    // 等待一段时间再检查
-                    Thread.sleep(1000); // 每秒检查一次
-
-                } catch (InterruptedException e) {
-                    logger.warn("监控仿真状态时被中断 run_id={}", runId);
-                    Thread.currentThread().interrupt();
+            while (!simulationFinished && checkCount < 3600) { // 最多监控1小时
+                Experiment.State state = globalSimulation.getState();
+                logger.info("仿真监控中，当前状态: {}", state.name());
+                if (state == Experiment.State.FINISHED) {
+                    logger.info("仿真已完成 run_id={}", runId);
+                    simulationFinished = true;
                     break;
-                } catch (Exception e) {
-                    logger.warn("监控仿真状态时发生异常 run_id={}: {}", runId, e.getMessage());
-                    // 如果出现异常，等待一段时间后继续
-                    try {
-                        Thread.sleep(2000);
-                    } catch (InterruptedException ie) {
-                        logger.warn("等待时被中断 run_id={}", runId);
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
                 }
+                if (state == Experiment.State.IDLE || state == Experiment.State.ERROR) {
+                    logger.info("仿真已停止或出错 run_id={}", runId);
+                    simulationFinished = true;
+                    break;
+                }
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    logger.warn("仿真监控线程被中断");
+                    break;
+                }
+                checkCount++;
             }
 
             logger.info("无界面仿真运行完成 run_id={}", runId);
@@ -546,6 +956,7 @@ public class AnyLogicModelService {
      * @param experiment 仿真实验对象
      * @return 端口号，如果获取失败返回-1
      */
+
     private static int getModelPort(Simulation experiment) {
         logger.info("通过ExperimentHost获取端口号...");
 
@@ -681,57 +1092,110 @@ public class AnyLogicModelService {
     }
 
     /**
-     * 停止指定的仿真 - 改进版本，安全清理资源
+     * 停止指定的仿真 - 改进版本，集成LongRunSimulation的控制逻辑
      */
-    public boolean stopSimulation(Integer runId) {
+    public boolean stopSimulation(Simulation simulation,Integer runId) {
         logger.info("尝试停止仿真 run_id={}", runId);
 
         try {
-            CompletableFuture<Void> task = runningSimulations.get(runId);
             Object experiment = activeExperiments.get(runId);
-
-            boolean stopped = false;
-
-            // 尝试停止CompletableFuture任务
-            if (task != null) {
-                boolean cancelled = task.cancel(true);
-                if (cancelled) {
-                    logger.info("成功取消仿真任务 run_id={}", runId);
-                    stopped = true;
-                }
-            }
-
-            // 尝试停止AnyLogic实验
             if (experiment != null) {
                 try {
-                    // 尝试调用停止方法（如果存在）
-                    Method stopMethod = experiment.getClass().getMethod("stop");
-                    stopMethod.invoke(experiment);
-                    logger.info("成功调用实验停止方法 run_id={}", runId);
-                    stopped = true;
+                    Method pauseMethod = experiment.getClass().getMethod("stop");
+                    pauseMethod.invoke(experiment);
+                    logger.info("成功停止仿真 run_id={}", runId);
+                    // updateSimulationState(runId, Experiment.State.IDLE);
+                    return true;
                 } catch (Exception e) {
-                    logger.debug("无法调用实验停止方法 run_id={}: {}", runId, e.getMessage());
+                    logger.error("暂停停止失败 run_id={}: {}", runId, e.getMessage());
                 }
             }
-
-            // 清理资源
-            runningSimulations.remove(runId);
-            activeExperiments.remove(runId);
-
-            if (stopped) {
-                updateSimulationStatus(runId, SimulationStatus.CANCELLED);
-                logger.info("成功停止仿真 run_id={}", runId);
-                return true;
-            }
-
         } catch (Exception e) {
             logger.error("停止仿真时发生异常 run_id={}: {}", runId, e.getMessage(), e);
-            // 即使发生异常，也要清理资源
-            runningSimulations.remove(runId);
-            activeExperiments.remove(runId);
         }
 
-        logger.warn("无法停止仿真 run_id={} - 可能已经结束或不存在", runId);
+        logger.warn("无法停止仿真 run_id={} - 可能不存在或已结束", runId);
+        return false;
+    }
+
+    /**
+     * 暂停指定的仿真
+     */
+    public boolean pauseSimulation(Integer runId) {
+        logger.info("尝试暂停仿真 run_id={}", runId);
+
+        try {
+            Object experiment = activeExperiments.get(runId);
+            if (experiment != null) {
+                try {
+                    Method pauseMethod = experiment.getClass().getMethod("pause");
+                    pauseMethod.invoke(experiment);
+                    logger.info("成功暂停仿真 run_id={}", runId);
+                    updateSimulationState(runId, Experiment.State.PAUSED);
+                    return true;
+                } catch (Exception e) {
+                    logger.error("暂停仿真失败 run_id={}: {}", runId, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            logger.error("暂停仿真时发生异常 run_id={}: {}", runId, e.getMessage(), e);
+        }
+
+        logger.warn("无法暂停仿真 run_id={} - 可能不存在或已结束", runId);
+        return false;
+    }
+
+    /**
+     * 恢复指定的仿真
+     */
+    public boolean resumeSimulation(Integer runId) {
+        logger.info("尝试恢复仿真 run_id={}", runId);
+
+        try {
+            Object experiment = activeExperiments.get(runId);
+            if (experiment != null) {
+                try {
+                    Method runMethod = experiment.getClass().getMethod("run");
+                    runMethod.invoke(experiment);
+                    logger.info("成功恢复仿真 run_id={}", runId);
+                    updateSimulationState(runId, Experiment.State.RUNNING);
+                    return true;
+                } catch (Exception e) {
+                    logger.error("恢复仿真失败 run_id={}: {}", runId, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            logger.error("恢复仿真时发生异常 run_id={}: {}", runId, e.getMessage(), e);
+        }
+
+        logger.warn("无法恢复仿真 run_id={} - 可能不存在或已结束", runId);
+        return false;
+    }
+
+    /**
+     * 重置指定的仿真
+     */
+    public boolean resetSimulation(Integer runId) {
+        logger.info("尝试重置仿真 run_id={}", runId);
+
+        try {
+            Object experiment = activeExperiments.get(runId);
+            if (experiment != null) {
+                try {
+                    Method resetMethod = experiment.getClass().getMethod("reset");
+                    resetMethod.invoke(experiment);
+                    logger.info("成功重置仿真 run_id={}", runId);
+                    updateSimulationState(runId, Experiment.State.IDLE);
+                    return true;
+                } catch (Exception e) {
+                    logger.error("重置仿真失败 run_id={}: {}", runId, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            logger.error("重置仿真时发生异常 run_id={}: {}", runId, e.getMessage(), e);
+        }
+
+        logger.warn("无法重置仿真 run_id={} - 可能不存在或已结束", runId);
         return false;
     }
 
@@ -739,31 +1203,31 @@ public class AnyLogicModelService {
      * 获取所有运行中的仿真
      */
     public List<SimulationRun> getRunningSimulations() {
-        return simulationRunRepository.findByStatus(SimulationStatus.RUNNING);
+        return simulationRunRepository.findByState(Experiment.State.RUNNING);
     }
 
     /**
      * 获取仿真运行状态
      */
-    public SimulationRun getSimulationStatus(Integer runId) {
+    public SimulationRun getSimulationState(Integer runId) {
         return simulationRunRepository.findById(runId).orElse(null);
     }
 
     /**
      * 更新仿真状态
      */
-    private void updateSimulationStatus(Integer runId, SimulationStatus status) {
+    private void updateSimulationState(Integer runId, Experiment.State state) {
         try {
             SimulationRun simulationRun = simulationRunRepository.findById(runId).orElse(null);
             if (simulationRun != null) {
-                simulationRun.setStatus(status);
-                if (status == SimulationStatus.COMPLETED ||
-                    status == SimulationStatus.FAILED ||
-                    status == SimulationStatus.CANCELLED) {
-                    simulationRun.setEndDate(LocalDateTime.now());
+                simulationRun.setState(state);
+                if (state == Experiment.State.FINISHED ||
+                    state == Experiment.State.ERROR ||
+                    state == Experiment.State.IDLE) {
+                    // simulationRun.setEndDate(LocalDateTime.now());
                 }
                 simulationRunRepository.save(simulationRun);
-                logger.info("更新仿真状态: run_id={}, status={}", runId, status);
+                logger.info("更新仿真状态: run_id={}, status={}", runId, state);
             }
         } catch (Exception e) {
             logger.error("更新仿真状态失败 run_id={}: {}", runId, e.getMessage(), e);
@@ -877,8 +1341,79 @@ public class AnyLogicModelService {
     }
 
     /**
-     * 应用智能体参数
-     * 在智能体创建之后应用智能体级别的参数
+     * 设置仿真参数 - 改进版本，集成LongRunSimulation的参数设置逻辑
+     */
+    private void setSimulTargetTime(Object experiment, String targetTime) {
+        try {
+            logger.info("尝试设置 simulTargetTime 参数: {}", targetTime);
+
+            // 方法1: 尝试通过反射查找参数字段
+            try {
+                Field field = experiment.getClass().getField("simulTargetTime");
+                field.setAccessible(true);
+                field.set(experiment, targetTime);
+                logger.info("✓ 通过字段反射成功设置 simulTargetTime = {}", targetTime);
+
+                // 验证设置
+                Object value = field.get(experiment);
+                logger.info("✓ 验证读取到的值: {}", value);
+            } catch (NoSuchFieldException e) {
+                logger.debug("未找到公共字段 simulTargetTime");
+            }
+
+            // 方法2: 尝试通过setter方法
+            try {
+                Method setter = experiment.getClass().getMethod("setSimulTargetTime", String.class);
+                setter.invoke(experiment, targetTime);
+                logger.info("✓ 通过setter方法成功设置 simulTargetTime");
+            } catch (NoSuchMethodException e) {
+                logger.debug("未找到 setSimulTargetTime 方法");
+            }
+
+            // 方法3: 尝试查找所有包含"simulTargetTime"的字段
+            Field[] allFields = experiment.getClass().getDeclaredFields();
+            for (Field field : allFields) {
+                if (field.getName().contains("simulTargetTime") || field.getName().toLowerCase().contains("target")) {
+                    try {
+                        field.setAccessible(true);
+                        if (field.getType() == String.class) {
+                            field.set(experiment, targetTime);
+                            logger.info("✓ 通过私有字段 {} 设置成功", field.getName());
+                            logger.info("✓ 当前值: {}", field.get(experiment));
+                        }
+                    } catch (Exception ex) {
+                        logger.debug("设置字段 {} 失败: {}", field.getName(), ex.getMessage());
+                    }
+                }
+            }
+
+            // 方法4: 尝试转换为日期并设置停止时间
+            try {
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                java.util.Date date = sdf.parse(targetTime);
+
+                // 尝试设置停止日期
+                Method setStopDateMethod = experiment.getClass().getMethod("setStopDate", java.util.Date.class);
+                setStopDateMethod.invoke(experiment, date);
+                logger.info("✓ 通过 setStopDate 设置目标时间成功");
+
+                // 验证停止日期
+                Method getStopDateMethod = experiment.getClass().getMethod("getStopDate");
+                java.util.Date stopDate = (java.util.Date) getStopDateMethod.invoke(experiment);
+                logger.info("✓ 停止日期: {}", sdf.format(stopDate));
+            } catch (java.text.ParseException pe) {
+                logger.debug("日期格式解析失败: {}", pe.getMessage());
+            } catch (NoSuchMethodException e) {
+                logger.debug("未找到 setStopDate 方法");
+            }
+
+        } catch (Exception e) {
+            logger.error("设置 simulTargetTime 参数失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 应用智能体参数 - 改进版本，集成LongRunSimulation的参数设置逻辑
      */
     private void applyAgentParameters(Simulation experiment, String agentParametersJson) {
         if (agentParametersJson == null || agentParametersJson.trim().isEmpty()) {
@@ -906,7 +1441,12 @@ public class AnyLogicModelService {
                 String paramName = entry.getKey();
                 Object paramValue = entry.getValue();
                 try {
-                    setParameterValue(mainAgent, paramName, paramValue);
+                    // 特殊处理 simulTargetTime 参数
+                    if ("simulTargetTime".equals(paramName)) {
+                        setSimulTargetTime(experiment, paramValue.toString());
+                    } else {
+                        setParameterValue(mainAgent, paramName, paramValue);
+                    }
                     logger.info("✓ 成功设置智能体参数: {} = {}", paramName, paramValue);
                 } catch (Exception e) {
                     logger.error("× 设置智能体参数失败: {} = {}, 错误: {}", paramName, paramValue, e.getMessage());
@@ -1057,50 +1597,7 @@ public class AnyLogicModelService {
         return str.substring(0, 1).toUpperCase() + str.substring(1);
     }
 
-    /**
-     * 优雅关闭仿真服务
-     */
-    public void shutdownGracefully() {
-        logger.info("开始优雅关闭仿真服务...");
 
-        try {
-            // 停止所有运行中的仿真
-            for (Integer runId : new java.util.ArrayList<>(runningSimulations.keySet())) {
-                try {
-                    logger.info("正在停止仿真 run_id={}", runId);
-                    stopSimulation(runId);
-                } catch (Exception e) {
-                    logger.error("停止仿真失败 run_id={}: {}", runId, e.getMessage());
-                }
-            }
-
-            // 关闭线程池
-            simulationExecutor.shutdown();
-            try {
-                if (!simulationExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
-                    logger.warn("仿真线程池未能在30秒内优雅关闭，强制关闭");
-                    simulationExecutor.shutdownNow();
-
-                    if (!simulationExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
-                        logger.error("仿真线程池强制关闭失败");
-                    }
-                }
-            } catch (InterruptedException e) {
-                logger.warn("等待线程池关闭时被中断");
-                simulationExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-
-            // 清理资源
-            runningSimulations.clear();
-            activeExperiments.clear();
-
-            logger.info("仿真服务优雅关闭完成");
-
-        } catch (Exception e) {
-            logger.error("优雅关闭仿真服务时发生异常: {}", e.getMessage(), e);
-        }
-    }
 
     /**
      * 获取仿真服务健康状态
@@ -1135,6 +1632,11 @@ public class AnyLogicModelService {
             }
             status.put("simulationDetails", simulationStatuses);
 
+            // 添加线程池详细信息
+            status.put("threadPoolShutdown", simulationExecutor.isShutdown());
+            status.put("threadPoolTerminated", simulationExecutor.isTerminated());
+            status.put("activeThreadCount", Thread.activeCount());
+
         } catch (Exception e) {
             status.put("isHealthy", false);
             status.put("error", e.getMessage());
@@ -1143,6 +1645,8 @@ public class AnyLogicModelService {
 
         return status;
     }
+
+
 
     /**
      * 仿真异常类

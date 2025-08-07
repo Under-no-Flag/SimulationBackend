@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import com.anylogic.engine.Experiment;
 
 @RestController
 @RequestMapping("/api/simulation")
@@ -63,25 +64,91 @@ public class SimulationController {
         }
     }
 
+    // /**
+    //  * 停止指定的模拟运行
+    //  */
+    // @PostMapping("/stop/{runId}")
+    // public ResponseEntity<?> stopSimulation(@PathVariable Integer runId) {
+    //     logger.info("收到停止模拟请求，运行ID: {}", runId);
+
+    //     try {
+    //         boolean success = anyLogicModelService.stopSimulation(runId);
+    //         if (success) {
+    //             return ResponseEntity.ok(new ApiResponse(true, "模拟停止成功", null));
+    //         } else {
+    //             return ResponseEntity.badRequest()
+    //                 .body(new ApiResponse(false, "模拟停止失败：找不到运行中的仿真", null));
+    //         }
+    //     } catch (Exception e) {
+    //         logger.error("停止模拟失败，运行ID: {}", runId, e);
+    //         return ResponseEntity.internalServerError()
+    //             .body(new ApiResponse(false, "停止模拟失败: " + e.getMessage(), null));
+    //     }
+    // }
+
     /**
-     * 停止指定的模拟运行
+     * 暂停指定的模拟运行
      */
-    @PostMapping("/stop/{runId}")
-    public ResponseEntity<?> stopSimulation(@PathVariable Integer runId) {
-        logger.info("收到停止模拟请求，运行ID: {}", runId);
+    @PostMapping("/pause/{runId}")
+    public ResponseEntity<?> pauseSimulation(@PathVariable Integer runId) {
+        logger.info("收到暂停模拟请求，运行ID: {}", runId);
 
         try {
-            boolean success = anyLogicModelService.stopSimulation(runId);
+            boolean success = anyLogicModelService.pauseSimulation(runId);
             if (success) {
-                return ResponseEntity.ok(new ApiResponse(true, "模拟停止成功", null));
+                return ResponseEntity.ok(new ApiResponse(true, "模拟暂停成功", null));
             } else {
                 return ResponseEntity.badRequest()
-                    .body(new ApiResponse(false, "模拟停止失败：找不到运行中的仿真", null));
+                    .body(new ApiResponse(false, "模拟暂停失败：找不到运行中的仿真", null));
             }
         } catch (Exception e) {
-            logger.error("停止模拟失败，运行ID: {}", runId, e);
+            logger.error("暂停模拟失败，运行ID: {}", runId, e);
             return ResponseEntity.internalServerError()
-                .body(new ApiResponse(false, "停止模拟失败: " + e.getMessage(), null));
+                .body(new ApiResponse(false, "暂停模拟失败: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * 恢复指定的模拟运行
+     */
+    @PostMapping("/resume/{runId}")
+    public ResponseEntity<?> resumeSimulation(@PathVariable Integer runId) {
+        logger.info("收到恢复模拟请求，运行ID: {}", runId);
+
+        try {
+            boolean success = anyLogicModelService.resumeSimulation(runId);
+            if (success) {
+                return ResponseEntity.ok(new ApiResponse(true, "模拟恢复成功", null));
+            } else {
+                return ResponseEntity.badRequest()
+                    .body(new ApiResponse(false, "模拟恢复失败：找不到运行中的仿真", null));
+            }
+        } catch (Exception e) {
+            logger.error("恢复模拟失败，运行ID: {}", runId, e);
+            return ResponseEntity.internalServerError()
+                .body(new ApiResponse(false, "恢复模拟失败: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * 重置指定的模拟运行
+     */
+    @PostMapping("/reset/{runId}")
+    public ResponseEntity<?> resetSimulation(@PathVariable Integer runId) {
+        logger.info("收到重置模拟请求，运行ID: {}", runId);
+
+        try {
+            boolean success = anyLogicModelService.resetSimulation(runId);
+            if (success) {
+                return ResponseEntity.ok(new ApiResponse(true, "模拟重置成功", null));
+            } else {
+                return ResponseEntity.badRequest()
+                    .body(new ApiResponse(false, "模拟重置失败：找不到运行中的仿真", null));
+            }
+        } catch (Exception e) {
+            logger.error("重置模拟失败，运行ID: {}", runId, e);
+            return ResponseEntity.internalServerError()
+                .body(new ApiResponse(false, "重置模拟失败: " + e.getMessage(), null));
         }
     }
 
@@ -89,7 +156,7 @@ public class SimulationController {
      * 获取运行状态信息
      */
     @GetMapping("/status")
-    public ResponseEntity<?> getSimulationStatus() {
+    public ResponseEntity<?> getSimulationState() {
         logger.info("获取仿真状态信息");
 
         try {
@@ -97,7 +164,7 @@ public class SimulationController {
             boolean modelExists = anyLogicModelService.isModelFileExists();
 
             return ResponseEntity.ok(new ApiResponse(true, "获取状态成功",
-                new SimulationStatusInfo(runningCount, modelExists)));
+                new SimulationStateInfo(runningCount, modelExists)));
         } catch (Exception e) {
             logger.error("获取仿真状态失败", e);
             return ResponseEntity.internalServerError()
@@ -126,6 +193,23 @@ public class SimulationController {
             logger.error("获取服务健康状态失败", e);
             return ResponseEntity.status(503)
                 .body(new ApiResponse(false, "健康检查失败: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * 测试线程池配置修复效果
+     */
+    @GetMapping("/test-thread-pool")
+    public ResponseEntity<?> testThreadPoolConfiguration() {
+        logger.info("测试线程池配置修复效果");
+
+        try {
+            Map<String, Object> testResult = anyLogicModelService.testThreadPoolConfiguration();
+            return ResponseEntity.ok(new ApiResponse(true, "线程池配置测试完成", testResult));
+        } catch (Exception e) {
+            logger.error("测试线程池配置失败", e);
+            return ResponseEntity.internalServerError()
+                .body(new ApiResponse(false, "测试线程池配置失败: " + e.getMessage(), null));
         }
     }
 
@@ -230,11 +314,11 @@ public class SimulationController {
     }
 
     // 内部类：仿真状态信息
-    public static class SimulationStatusInfo {
+    public static class SimulationStateInfo {
         private int runningSimulationCount;
         private boolean modelFileExists;
 
-        public SimulationStatusInfo(int runningSimulationCount, boolean modelFileExists) {
+        public SimulationStateInfo(int runningSimulationCount, boolean modelFileExists) {
             this.runningSimulationCount = runningSimulationCount;
             this.modelFileExists = modelFileExists;
         }

@@ -1,6 +1,6 @@
 package com.simulation.demo.entity;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.simulation.demo.entity.converter.SimulationStatusConverter;
+import com.anylogic.engine.Experiment;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -37,9 +37,9 @@ public class SimulationRun {
     @Column(name = "agent_parameters", columnDefinition = "TEXT")
     private String agentParameters;
 
-    @Convert(converter = SimulationStatusConverter.class)
-    @Column(name = "status")
-    private SimulationStatus status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "state", nullable = false)
+    private Experiment.State state;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -62,7 +62,7 @@ public class SimulationRun {
     public SimulationRun(String modelName, LocalDateTime startDate) {
         this.modelName = modelName;
         this.startDate = startDate;
-        this.status = SimulationStatus.PENDING;
+        this.state = Experiment.State.IDLE;
     }
 
     // Getter 和 Setter
@@ -122,12 +122,12 @@ public class SimulationRun {
         this.agentParameters = agentParameters;
     }
 
-    public SimulationStatus getStatus() {
-        return status;
+    public Experiment.State getState() {
+        return state;
     }
 
-    public void setStatus(SimulationStatus status) {
-        this.status = status;
+    public void setState(Experiment.State state) {
+        this.state = state;
     }
 
     public String getDescription() {

@@ -55,3 +55,8 @@ simulation:
     concurrent: 3  # 最大并发仿真数量
   web:
     enabled: true  # 是否启用Web服务器（设为false禁用浏览器弹出）
+  cleanup:
+    use-engine-finish: true    # 使用Engine.finish()方法
+    avoid-close-method: true   # 避免使用close方法
+    wait-time: 3000           # 等待时间（毫秒）
+    flush-cache: true         # 清理缓存

@@ -4,22 +4,11 @@ import com.simulation.demo.entity.SimulationStatus;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
-@Converter(autoApply = true)
-public class SimulationStatusConverter implements AttributeConverter<SimulationStatus, String> {
-
+@Deprecated
+public class SimulationStatusConverter implements AttributeConverter<Object, String> {
+    // 已废弃，统一用Experiment.State
     @Override
-    public String convertToDatabaseColumn(SimulationStatus attribute) {
-        if (attribute == null) {
-            return null;
-        }
-        return attribute.toDatabaseValue();
-    }
-
+    public String convertToDatabaseColumn(Object attribute) { return null; }
     @Override
-    public SimulationStatus convertToEntityAttribute(String dbData) {
-        if (dbData == null) {
-            return null;
-        }
-        return SimulationStatus.fromDatabaseValue(dbData);
-    }
+    public Object convertToEntityAttribute(String dbData) { return null; }
 }
