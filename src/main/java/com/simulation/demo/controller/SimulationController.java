@@ -34,7 +34,10 @@ public class SimulationController {
      */
     @PostMapping("/start")
     public ResponseEntity<?> startSimulation(@RequestBody SimulationStartRequest request) {
-        logger.info("收到启动模拟请求: {}", request.getModelName());
+        logger.info("收到启动模拟请求: modelName={}, engineParams={}, agentParams={}",
+                   request.getModelName(),
+                   request.getEngineParameters() != null ? request.getEngineParameters().size() : 0,
+                   request.getAgentParameters() != null ? request.getAgentParameters().size() : 0);
 
         try {
             // 检查模型文件是否存在
@@ -43,24 +46,11 @@ public class SimulationController {
                     .body(new ApiResponse(false, "模型文件不存在", null));
             }
 
-            // 将引擎参数Map转换为JSON字符串
-            String engineParametersJson = null;
-            if (request.getEngineParameters() != null && !request.getEngineParameters().isEmpty()) {
-                ObjectMapper objectMapper = new ObjectMapper();
-                engineParametersJson = objectMapper.writeValueAsString(request.getEngineParameters());
-            }
-
-            // 将智能体参数Map转换为JSON字符串
-            String agentParametersJson = null;
-            if (request.getAgentParameters() != null && !request.getAgentParameters().isEmpty()) {
-                ObjectMapper objectMapper = new ObjectMapper();
-                agentParametersJson = objectMapper.writeValueAsString(request.getAgentParameters());
-            }
-
+            // 启动仿真（参数转换在服务层处理）
             SimulationRun simulationRun = anyLogicModelService.createAndStartSimulation(
                 request.getModelName(),
-                engineParametersJson,
-                agentParametersJson,
+                request.getEngineParameters(),
+                request.getAgentParameters(),
                 request.getDescription()
             );
 
@@ -125,7 +115,7 @@ public class SimulationController {
         try {
             Map<String, Object> healthStatus = anyLogicModelService.getServiceHealthStatus();
             boolean isHealthy = (Boolean) healthStatus.getOrDefault("isHealthy", false);
-            
+
             if (isHealthy) {
                 return ResponseEntity.ok(new ApiResponse(true, "服务健康", healthStatus));
             } else {

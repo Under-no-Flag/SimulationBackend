@@ -64,7 +64,17 @@ public class AnyLogicModelService {
 
         @Override
         public Thread newThread(Runnable r) {
-            Thread t = new Thread(r, "SimulationWorker-" + threadNumber.getAndIncrement());
+            Thread t = new Thread(() -> {
+                // 在线程开始时设置日志上下文
+                try {
+                    Thread.currentThread().setContextClassLoader(AnyLogicModelService.class.getClassLoader());
+                    // 确保日志配置在子线程中生效
+                    org.slf4j.LoggerFactory.getILoggerFactory();
+                } catch (Exception e) {
+                    // 忽略日志初始化异常
+                }
+                r.run();
+            }, "SimulationWorker-" + threadNumber.getAndIncrement());
             t.setDaemon(true); // 设置为守护线程
             t.setUncaughtExceptionHandler((thread, exception) -> {
                 logger.error("仿真线程 {} 发生未捕获异常: {}", thread.getName(), exception.getMessage(), exception);
@@ -197,9 +207,12 @@ public class AnyLogicModelService {
     /**
      * 创建并启动仿真（Controller接口兼容方法）
      */
-    public SimulationRun createAndStartSimulation(String modelName, String engineParameters, String agentParameters, String description) {
-        logger.info("创建并启动仿真: modelName={}, engineParameters={}, agentParameters={}, description={}",
-                   modelName, engineParameters, agentParameters, description);
+    public SimulationRun createAndStartSimulation(String modelName, Map<String, Object> engineParameters, Map<String, Object> agentParameters, String description) {
+        logger.info("创建并启动仿真: modelName={}, engineParams={}, agentParams={}, description={}",
+                   modelName,
+                   engineParameters != null ? engineParameters.size() : 0,
+                   agentParameters != null ? agentParameters.size() : 0,
+                   description);
 
         try {
             // 检查并发限制
@@ -207,13 +220,29 @@ public class AnyLogicModelService {
                 throw new RuntimeException("已达到最大并发仿真数量限制: " + maxConcurrentSimulations);
             }
 
+            // 将参数Map转换为JSON字符串
+            String engineParametersJson = null;
+            String agentParametersJson = null;
+
+            if (engineParameters != null && !engineParameters.isEmpty()) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                engineParametersJson = objectMapper.writeValueAsString(engineParameters);
+                logger.info("引擎参数JSON: {}", engineParametersJson);
+            }
+
+            if (agentParameters != null && !agentParameters.isEmpty()) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                agentParametersJson = objectMapper.writeValueAsString(agentParameters);
+                logger.info("智能体参数JSON: {}", agentParametersJson);
+            }
+
             // 创建仿真运行记录
             SimulationRun simulationRun = new SimulationRun();
             simulationRun.setModelName(modelName != null ? modelName : "NanJingDong");
             simulationRun.setStartDate(LocalDateTime.now());
             simulationRun.setStatus(SimulationStatus.PENDING);
-            simulationRun.setEngineParameters(engineParameters);
-            simulationRun.setAgentParameters(agentParameters);
+            simulationRun.setEngineParameters(engineParametersJson);
+            simulationRun.setAgentParameters(agentParametersJson);
             simulationRun.setDescription(description);
             simulationRun = simulationRunRepository.save(simulationRun);
 
@@ -274,35 +303,53 @@ public class AnyLogicModelService {
         runningSimulations.put(runId, simulationTask);
     }
     /**
-     * 在独立线程中运行仿真
+     * 在线程中运行仿真
+     * 流程：创建仿真实例 -> 应用引擎参数 -> 创建智能体 -> 应用智能体参数 -> 运行仿真
      */
     private Object runSimulationInThread(Integer runId) throws InterruptedException {
         logger.info("开始在线程中运行仿真 run_id={}", runId);
 
         try {
-            // 获取仿真参数
+            // 1. 获取仿真参数
             SimulationRun simulationRun = simulationRunRepository.findById(runId).orElse(null);
-            String engineParameters = simulationRun != null ? simulationRun.getEngineParameters() : null;
-            String agentParameters = simulationRun != null ? simulationRun.getAgentParameters() : null;
+            if (simulationRun == null) {
+                logger.error("找不到仿真运行记录 run_id={}", runId);
+                updateSimulationStatus(runId, SimulationStatus.FAILED);
+                return null;
+            }
 
-            // 创建仿真实例
+            String engineParametersJson = simulationRun.getEngineParameters();
+            String agentParametersJson = simulationRun.getAgentParameters();
+            agentParametersJson=agentParametersJson.replace("\"runId\":null", "\"runId\":"+runId);
+
+            logger.info("获取到仿真参数 run_id={}, engineParams={}, agentParams={}",
+                       runId, engineParametersJson, agentParametersJson);
+
+            // 2. 创建仿真实例
             logger.info("正在创建 Simulation 实例...");
             Simulation experiment = new Simulation();
             activeExperiments.put(runId, experiment);
             logger.info("✓ Simulation 实例创建成功");
 
-            // 应用引擎参数和智能体参数
-            applyEngineParameters(experiment, engineParameters);
-            applyAgentParameters(experiment, agentParameters);
+            // 3. 应用引擎参数（在创建智能体之前）
+            logger.info("=== 应用引擎参数 ===");
+            applyEngineParameters(experiment, engineParametersJson);
 
-            // 根据配置决定是否获取模型端口号
+            // 4. 创建顶层智能体（通过step()方法）
+            logger.info("=== 创建顶层智能体 ===");
+            experiment.step();
+            logger.info("✓ 顶层智能体创建成功");
+
+            // 5. 应用智能体参数（在智能体创建之后）
+            logger.info("=== 应用智能体参数 ===");
+            applyAgentParameters(experiment, agentParametersJson);
+
+            // 6. 根据配置决定是否获取模型端口号
             if (webServerEnabled) {
                 logger.info("=== 获取模型端口号 ===");
                 int port = getModelPort(experiment);
                 if (port > 0) {
                     logger.info("✓✓✓ 最终获取到的端口号: {} ✓✓✓", port);
-
-                    // 更新数据库记录
                     updateSimulationPort(runId, port);
                 } else {
                     logger.warn("× 未能获取到有效的端口号");
@@ -311,7 +358,7 @@ public class AnyLogicModelService {
                 logger.info("Web服务器已禁用，跳过端口获取");
             }
 
-            // 启动仿真
+            // 7. 启动仿真
             logger.info("开始运行仿真...");
             long startTime = System.currentTimeMillis();
 
@@ -322,130 +369,156 @@ public class AnyLogicModelService {
                 currentThread.setName("Simulation-" + runId);
 
                 try {
-                    logger.info("仿真开始运行 run_id={}, 线程: {} (无界面模式)", runId, currentThread.getName());
+                    // 在线程开始时立即测试日志
+                    Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
+                    threadLogger.info("=== 线程开始 - 日志测试 ===");
+                    threadLogger.info("仿真开始运行 run_id={}, 线程: {} (无界面模式)", runId, currentThread.getName());
+
+                    // 测试子线程日志
+                    testThreadLogging(runId);
 
                     // 设置线程中断处理
                     if (Thread.currentThread().isInterrupted()) {
-                        logger.warn("仿真线程被中断，停止运行 run_id={}", runId);
+                        threadLogger.warn("仿真线程被中断，停止运行 run_id={}", runId);
                         return;
                     }
 
                     // 启动无界面仿真
                     runHeadlessSimulation(experiment, runId);
-                    logger.info("仿真正常结束 run_id={}", runId);
-
+                    threadLogger.info("仿真正常结束 run_id={}");
 
                 } catch (Exception e) {
-                    logger.error("仿真运行异常 run_id={}: {}", runId, e.getMessage(), e);
+                    Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
+                    threadLogger.error("仿真运行异常 run_id={}: {}", runId, e.getMessage(), e);
                     updateSimulationStatus(runId, SimulationStatus.FAILED);
                 } finally {
                     currentThread.setName(originalName);
-                    logger.info("仿真线程清理完成 run_id={}", runId);
+                    Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
+                    threadLogger.info("仿真线程清理完成 run_id={}", runId);
                 }
             }, simulationExecutor).exceptionally(throwable -> {
-                logger.error("仿真执行出现严重错误 run_id={}: {}", runId, throwable.getMessage(), throwable);
+                Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
+                threadLogger.error("仿真执行出现严重错误 run_id={}: {}", runId, throwable.getMessage(), throwable);
                 updateSimulationStatus(runId, SimulationStatus.FAILED);
                 return null;
             });
 
-            // 监控仿真状态 - 改进版本，支持早期退出和异常恢复
-            boolean simulationCompleted = false;
-            for (int i = 0; i < 12 && !simulationCompleted; i++) { // 监控1分钟
-                try {
-                    Thread.sleep(5000); // 等待5秒
-
-                    // 检查当前线程是否被中断
-                    if (Thread.currentThread().isInterrupted()) {
-                        logger.warn("监控线程被中断，停止监控 run_id={}", runId);
-                        break;
-                    }
-
-                    // 检查仿真是否已经完成
-                    if (simulationRunFuture.isDone()) {
-                        logger.info("仿真执行已完成 run_id={}", runId);
-                        simulationCompleted = true;
-                        break;
-                    }
-
-                    long currentTime = System.currentTimeMillis();
-                    long elapsed = currentTime - startTime;
-
-                    logger.info("仿真运行时间: {} 秒 (run_id={})", elapsed / 1000, runId);
-
-                    // 安全地获取当前仿真时间
-                    try {
-                        double simTime = getCurrentSimulationTime(experiment);
-                        if (simTime >= 0) {
-                            logger.info("当前仿真时间: {} (run_id={})", simTime, runId);
-                        }
-                    } catch (Exception e) {
-                        logger.debug("获取仿真时间失败: {}", e.getMessage());
-                        // 不影响主监控流程
-                    }
-
-                    logger.info("监控中... ({}/12) run_id={}", i + 1, runId);
-
-
-                } catch (Exception e) {
-                    logger.error("监控过程中发生异常 run_id={}: {}", runId, e.getMessage(), e);
-                    // 继续监控，不因单次异常而停止
-                }
+            // 8. 等待仿真完成
+            try {
+                simulationRunFuture.get(30, TimeUnit.SECONDS); // 等待30秒
+                logger.info("仿真任务完成 run_id={}", runId);
+                updateSimulationStatus(runId, SimulationStatus.COMPLETED);
+            } catch (TimeoutException e) {
+                logger.warn("仿真任务超时 run_id={}", runId);
+                updateSimulationStatus(runId, SimulationStatus.FAILED);
+            } catch (Exception e) {
+                logger.error("仿真任务异常 run_id={}: {}", runId, e.getMessage(), e);
+                updateSimulationStatus(runId, SimulationStatus.FAILED);
             }
 
-            // 标记仿真完成
-            updateSimulationStatus(runId, SimulationStatus.COMPLETED);
-            logger.info("仿真监控结束 run_id={}", runId);
-
             return experiment;
-
 
         } catch (Exception e) {
             logger.error("仿真线程执行失败 run_id={}: {}", runId, e.getMessage(), e);
             updateSimulationStatus(runId, SimulationStatus.FAILED);
+            return null;
+        }
+    }
 
-            // 不抛出RuntimeException，避免影响主应用程序
-            logger.error("仿真执行失败，但不影响后端服务继续运行 run_id={}", runId);
-            return null; // 返回null表示失败，但不中断应用程序
+    /**
+     * 测试子线程日志输出
+     */
+    private void testThreadLogging(Integer runId) {
+        try {
+            Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
+            threadLogger.info("=== 子线程日志测试开始 ===");
+            threadLogger.info("当前线程: {}", Thread.currentThread().getName());
+            threadLogger.info("线程ID: {}", Thread.currentThread().getId());
+            threadLogger.info("类加载器: {}", Thread.currentThread().getContextClassLoader());
+            threadLogger.info("=== 子线程日志测试结束 ===");
+        } catch (Exception e) {
+            System.err.println("日志测试失败: " + e.getMessage());
         }
     }
 
     /**
      * 运行无界面仿真
+     * 注意：参数已经在runSimulationInThread中应用过了，这里只需要运行仿真
      */
     private void runHeadlessSimulation(Simulation experiment, Integer runId) {
         try {
+            // 在子线程中重新配置日志上下文
+            Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
+            System.setProperty("java.awt.headless", "true"); // 确保当前线程也是无界面模式
+
+            // 强制刷新日志配置 - 在AnyLogic运行前重新初始化
+            try {
+                // 重新获取logger实例，确保在子线程中正常工作
+                Logger threadLogger = LoggerFactory.getLogger(AnyLogicModelService.class);
+                threadLogger.info("=== 子线程日志测试 - 在AnyLogic运行前 ===");
+
+                // 强制刷新日志工厂
+                org.slf4j.LoggerFactory.getILoggerFactory();
+            } catch (Exception e) {
+                System.err.println("日志工厂初始化异常: " + e.getMessage());
+            }
+
             logger.info("启动无界面仿真 run_id={}", runId);
 
-            // 确保在当前线程中也设置无界面模式
-            Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
-
-            // 设置线程级别的系统属性
-            System.setProperty("java.awt.headless", "true");
-
-            // 获取引擎并设置引擎参数
-            Object engine = experiment.getEngine();
-            if (engine != null) {
-                logger.info("获取到引擎: {}", engine.getClass().getName());
-
-                // 这里可以添加引擎特定的设置
-                // 例如：engine.setStartDate(), engine.setStopDate(), engine.setRealTimeScale()
-            }
-
-            // 启动仿真到能获取agent的状态
-            experiment.step();
-            experiment.pause();
-
-            // 获取主智能体并设置参数
-            Object mainAgent = experiment.getEngine().getRoot();
-            if (mainAgent != null) {
-                logger.info("获取到主智能体: {}", mainAgent.getClass().getName());
-
-                // 这里可以添加智能体特定的设置
-                // 例如：mainAgent.setParameter("simulTargetTime", value, true)
-            }
-
-            // 使用简单的run方式启动仿真，避免ExperimentHost相关的浏览器启动
+            // 启动仿真
             experiment.run();
+
+            // 监控仿真状态，等待仿真完成
+            boolean simulationFinished = false;
+            while (!simulationFinished) {
+                try {
+                    // 检查仿真状态
+                    Object state = experiment.getState();
+                    logger.info("当前仿真状态: {} (run_id={})", state, runId);
+
+                    // 获取仿真时间
+                    try {
+                        java.lang.reflect.Method getTimeMethod = experiment.getClass().getMethod("getRunTimeSeconds");
+                        if (getTimeMethod != null) {
+                            double simTime = (Double) getTimeMethod.invoke(experiment);
+                            logger.info("当前仿真时间: {} 秒 (run_id={})", simTime, runId);
+                        }
+                    } catch (Exception e) {
+                        // 忽略反射错误，尝试其他方法获取时间
+                        try {
+                            double simTime = experiment.time();
+                            logger.info("当前仿真时间: {} 秒 (run_id={})", simTime, runId);
+                        } catch (Exception ex) {
+                            // 忽略时间获取错误
+                        }
+                    }
+
+                    // 检查仿真是否完成
+                    if (state != null && state.toString().equals("FINISHED")) {
+                        logger.info("仿真已完成 run_id={}", runId);
+                        simulationFinished = true;
+                        break;
+                    }
+
+                    // 等待一段时间再检查
+                    Thread.sleep(1000); // 每秒检查一次
+
+                } catch (InterruptedException e) {
+                    logger.warn("监控仿真状态时被中断 run_id={}", runId);
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    logger.warn("监控仿真状态时发生异常 run_id={}: {}", runId, e.getMessage());
+                    // 如果出现异常，等待一段时间后继续
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException ie) {
+                        logger.warn("等待时被中断 run_id={}", runId);
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
 
             logger.info("无界面仿真运行完成 run_id={}", runId);
 
@@ -760,7 +833,8 @@ public class AnyLogicModelService {
     }
 
     /**
-     * 应用引擎参数（ExperimentSimulation引擎参数）
+     * 应用引擎参数
+     * 在创建智能体之前应用引擎级别的参数
      */
     private void applyEngineParameters(Simulation experiment, String engineParametersJson) {
         if (engineParametersJson == null || engineParametersJson.trim().isEmpty()) {
@@ -769,33 +843,33 @@ public class AnyLogicModelService {
         }
 
         try {
-            // 解析JSON参数
             ObjectMapper objectMapper = new ObjectMapper();
             @SuppressWarnings("unchecked")
             Map<String, Object> parameters = objectMapper.readValue(engineParametersJson, Map.class);
-
             logger.info("开始应用引擎参数: {}", parameters);
 
-            // 获取引擎
+            // 获取引擎对象
             Object engine = experiment.getEngine();
             if (engine == null) {
                 logger.error("无法获取引擎，参数设置失败");
                 return;
             }
 
-            // 遍历参数并设置
+            logger.info("获取到引擎对象: {}", engine.getClass().getName());
+
+            // 应用每个参数
             for (Map.Entry<String, Object> entry : parameters.entrySet()) {
                 String paramName = entry.getKey();
                 Object paramValue = entry.getValue();
-
                 try {
                     setEngineParameterValue(engine, paramName, paramValue);
                     logger.info("✓ 成功设置引擎参数: {} = {}", paramName, paramValue);
                 } catch (Exception e) {
-                    logger.error("× 设置引擎参数失败: {} = {}, 错误: {}",
-                        paramName, paramValue, e.getMessage());
+                    logger.error("× 设置引擎参数失败: {} = {}, 错误: {}", paramName, paramValue, e.getMessage());
                 }
             }
+
+            logger.info("引擎参数应用完成");
 
         } catch (Exception e) {
             logger.error("解析或应用引擎参数失败: {}", e.getMessage(), e);
@@ -803,7 +877,8 @@ public class AnyLogicModelService {
     }
 
     /**
-     * 应用智能体参数（Main智能体参数）
+     * 应用智能体参数
+     * 在智能体创建之后应用智能体级别的参数
      */
     private void applyAgentParameters(Simulation experiment, String agentParametersJson) {
         if (agentParametersJson == null || agentParametersJson.trim().isEmpty()) {
@@ -812,33 +887,33 @@ public class AnyLogicModelService {
         }
 
         try {
-            // 解析JSON参数
             ObjectMapper objectMapper = new ObjectMapper();
             @SuppressWarnings("unchecked")
             Map<String, Object> parameters = objectMapper.readValue(agentParametersJson, Map.class);
-
             logger.info("开始应用智能体参数: {}", parameters);
 
-            // 获取主代理
+            // 获取主智能体对象
             Object mainAgent = getMainAgent(experiment);
             if (mainAgent == null) {
-                logger.error("无法获取主代理，参数设置失败");
+                logger.error("无法获取主智能体，参数设置失败");
                 return;
             }
 
-            // 遍历参数并设置
+            logger.info("获取到主智能体对象: {}", mainAgent.getClass().getName());
+
+            // 应用每个参数
             for (Map.Entry<String, Object> entry : parameters.entrySet()) {
                 String paramName = entry.getKey();
                 Object paramValue = entry.getValue();
-
                 try {
                     setParameterValue(mainAgent, paramName, paramValue);
                     logger.info("✓ 成功设置智能体参数: {} = {}", paramName, paramValue);
                 } catch (Exception e) {
-                    logger.error("× 设置智能体参数失败: {} = {}, 错误: {}",
-                        paramName, paramValue, e.getMessage());
+                    logger.error("× 设置智能体参数失败: {} = {}, 错误: {}", paramName, paramValue, e.getMessage());
                 }
             }
+
+            logger.info("智能体参数应用完成");
 
         } catch (Exception e) {
             logger.error("解析或应用智能体参数失败: {}", e.getMessage(), e);
@@ -857,7 +932,7 @@ public class AnyLogicModelService {
             field.setAccessible(true);
 
             // 类型转换
-            Object convertedValue = convertParameterValue(field.getType(), paramValue);
+            Object convertedValue = ParameterConversionUtils.convertParameterValue(field.getType(), paramValue);
             field.set(engine, convertedValue);
 
         } catch (NoSuchFieldException e) {
@@ -870,7 +945,7 @@ public class AnyLogicModelService {
                     method.getParameterCount() == 1) {
 
                     Class<?> paramType = method.getParameterTypes()[0];
-                    Object convertedValue = convertParameterValue(paramType, paramValue);
+                    Object convertedValue = ParameterConversionUtils.convertParameterValue(paramType, paramValue);
                     method.invoke(engine, convertedValue);
                     return;
                 }
@@ -880,65 +955,55 @@ public class AnyLogicModelService {
         }
     }
 
-    /**
-     * 应用仿真参数（保留兼容性）
-     */
-    private void applySimulationParameters(Object experiment, String parametersJson) {
-        if (parametersJson == null || parametersJson.trim().isEmpty()) {
-            logger.info("没有提供仿真参数，使用默认值");
-            return;
-        }
 
-        try {
-            // 解析JSON参数
-            ObjectMapper objectMapper = new ObjectMapper();
-            @SuppressWarnings("unchecked")
-            Map<String, Object> parameters = objectMapper.readValue(parametersJson, Map.class);
 
-            logger.info("开始应用仿真参数: {}", parameters);
-
-            // 获取主代理
-            Object mainAgent = getMainAgent(experiment);
-            if (mainAgent == null) {
-                logger.error("无法获取主代理，参数设置失败");
-                return;
-            }
-
-            // 遍历参数并设置
-            for (Map.Entry<String, Object> entry : parameters.entrySet()) {
-                String paramName = entry.getKey();
-                Object paramValue = entry.getValue();
-
-                try {
-                    setParameterValue(mainAgent, paramName, paramValue);
-                    logger.info("✓ 成功设置参数: {} = {}", paramName, paramValue);
-                } catch (Exception e) {
-                    logger.error("× 设置参数失败: {} = {}, 错误: {}",
-                        paramName, paramValue, e.getMessage());
-                }
-            }
-
-        } catch (Exception e) {
-            logger.error("解析或应用仿真参数失败: {}", e.getMessage(), e);
-        }
-    }
 
     /**
-     * 获取主代理
+     * 获取主智能体对象
+     * 通过引擎的getRoot()方法获取顶层智能体
      */
     private Object getMainAgent(Object experiment) {
         try {
-            // 根据你的代码示例
-            if (experiment instanceof Simulation) {
-                Simulation sim = (Simulation) experiment;
-                // 启动仿真到能获取agent的状态
-                sim.step();
-                sim.pause();
-                return sim.getEngine().getRoot();
+            if (experiment == null) {
+                logger.error("实验对象为空，无法获取主智能体");
+                return null;
             }
-            return null;
+
+            // 获取引擎对象
+            Object engine = null;
+            try {
+                Method getEngineMethod = experiment.getClass().getMethod("getEngine");
+                engine = getEngineMethod.invoke(experiment);
+            } catch (Exception e) {
+                logger.error("无法获取引擎对象: {}", e.getMessage());
+                return null;
+            }
+
+            if (engine == null) {
+                logger.error("引擎对象为空，无法获取主智能体");
+                return null;
+            }
+
+            // 通过引擎获取根智能体
+            Object mainAgent = null;
+            try {
+                Method getRootMethod = engine.getClass().getMethod("getRoot");
+                mainAgent = getRootMethod.invoke(engine);
+            } catch (Exception e) {
+                logger.error("无法获取根智能体: {}", e.getMessage());
+                return null;
+            }
+
+            if (mainAgent == null) {
+                logger.error("主智能体对象为空");
+                return null;
+            }
+
+            logger.info("成功获取主智能体: {}", mainAgent.getClass().getName());
+            return mainAgent;
+
         } catch (Exception e) {
-            logger.error("获取主代理失败: {}", e.getMessage(), e);
+            logger.error("获取主智能体失败: {}", e.getMessage(), e);
             return null;
         }
     }
@@ -957,11 +1022,12 @@ public class AnyLogicModelService {
             field.setAccessible(true);
 
             // 类型转换
-            Object convertedValue = convertParameterValue(field.getType(), paramValue);
+            Object convertedValue = ParameterConversionUtils.convertParameterValue(field.getType(), paramValue);
             field.set(agent, convertedValue);
 
         } catch (NoSuchFieldException e) {
             // 如果字段不存在，尝试使用setter方法
+            logger.info("{}字段不存在，尝试使用setter方法", paramName);
             String setterName = "set" + capitalize(paramName);
             Method[] methods = agentClass.getMethods();
 
@@ -970,7 +1036,8 @@ public class AnyLogicModelService {
                     method.getParameterCount() == 1) {
 
                     Class<?> paramType = method.getParameterTypes()[0];
-                    Object convertedValue = convertParameterValue(paramType, paramValue);
+                    logger.info("paramType: {}", paramType);
+                    Object convertedValue = ParameterConversionUtils.convertParameterValue(paramType, paramValue);
                     method.invoke(agent, convertedValue);
                     return;
                 }
@@ -980,38 +1047,7 @@ public class AnyLogicModelService {
         }
     }
 
-    /**
-     * 参数类型转换
-     */
-    private Object convertParameterValue(Class<?> targetType, Object value) {
-        if (value == null) return null;
 
-        // 如果类型已经匹配
-        if (targetType.isAssignableFrom(value.getClass())) {
-            return value;
-        }
-
-        // 类型转换
-        String valueStr = value.toString();
-
-        if (targetType == String.class) {
-            return valueStr;
-        } else if (targetType == int.class || targetType == Integer.class) {
-            return Integer.valueOf(valueStr);
-        } else if (targetType == double.class || targetType == Double.class) {
-            return Double.valueOf(valueStr);
-        } else if (targetType == boolean.class || targetType == Boolean.class) {
-            return Boolean.valueOf(valueStr);
-        } else if (targetType == long.class || targetType == Long.class) {
-            return Long.valueOf(valueStr);
-        } else if (targetType == float.class || targetType == Float.class) {
-            return Float.valueOf(valueStr);
-        }
-        // 可以添加更多类型转换
-
-        logger.warn("不支持的参数类型转换: {} -> {}", value.getClass(), targetType);
-        return value;
-    }
 
     /**
      * 首字母大写
