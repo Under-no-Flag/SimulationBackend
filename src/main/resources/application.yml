@@ -55,3 +55,9 @@ simulation:
     concurrent: 3  # 最大并发仿真数量
   web:
     enabled: true  # 是否启用Web服务器（设为false禁用浏览器弹出）
+
+# 坐标转换配置
+coordinate:
+  conversion:
+    scheduled:
+      enabled: true  # 启用自动坐标转换

@@ -47,4 +47,14 @@ public interface PedestrianDataRepository extends JpaRepository<PedestrianData, 
      */
     @Query("SELECT COUNT(DISTINCT pd.pedestrianId) FROM PedestrianData pd WHERE pd.runId = :runId")
     Long countDistinctPedestriansByRunId(@Param("runId") Integer runId);
+
+    /**
+     * 根据运行ID和仿真时间查询行人数据
+     */
+    List<PedestrianData> findByRunIdAndSimTime(Integer runId, BigDecimal simTime);
+
+    /**
+     * 查找没有经纬度信息的行人数据
+     */
+    List<PedestrianData> findByLatIsNullOrLonIsNull();
 }

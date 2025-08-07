@@ -41,6 +41,12 @@ public class PedestrianData {
     @Column(name = "area_name", length = 100)
     private String areaName;
 
+    @Column(name = "lat")
+    private Double lat;
+
+    @Column(name = "lon")
+    private Double lon;
+
     // 关联到SimulationRun
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "run_id", insertable = false, updatable = false)
@@ -133,6 +139,19 @@ public class PedestrianData {
 
     public void setAreaName(String areaName) {
         this.areaName = areaName;
+    }
+
+    public Double getLat() {
+        return lat;
+    }
+    public void setLat(Double lat) {
+        this.lat = lat;
+    }
+    public Double getLon() {
+        return lon;
+    }
+    public void setLon(Double lon) {
+        this.lon = lon;
     }
 
     public SimulationRun getSimulationRun() {

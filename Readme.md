@@ -101,6 +101,8 @@ Pedestrian destination: leave
 .\mvnw.cmd spring-boot:run
 ```
 
+mvn spring-boot:run
+
 3. 发送请求（可使用postman发送，也可编写测试单元启动）
 ![](./images/Snipaste_2025-08-06_08-55-38.jpg)
 

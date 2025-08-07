@@ -3,12 +3,14 @@ package com.simulation.demo.controller;
 import com.simulation.demo.entity.EventsLog;
 import com.simulation.demo.entity.PedestrianData;
 import com.simulation.demo.service.SimulationDataService;
+import com.simulation.demo.service.CoordinateConversionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import util.GeoUtil;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,6 +24,9 @@ public class DataController {
 
     @Autowired
     private SimulationDataService simulationDataService;
+
+    @Autowired
+    private CoordinateConversionService coordinateConversionService;
 
     /**
      * 获取行人数据（分页）
@@ -106,6 +111,25 @@ public class DataController {
     }
 
     /**
+     * 获取指定仿真时间的行人数据
+     */
+    @GetMapping("/pedestrians/{runId}/simtime/{sim_time}")
+    public ResponseEntity<?> getPedestrianDataBySimTime(
+            @PathVariable Integer runId,
+            @PathVariable("sim_time") String simTimeStr) {
+        logger.info("获取指定仿真时间的行人数据，运行ID: {}, 仿真时间: {}", runId, simTimeStr);
+        try {
+            BigDecimal simTime = new BigDecimal(simTimeStr);
+            List<PedestrianData> pedestrianData = simulationDataService.getPedestrianDataByRunIdAndSimTime(runId, simTime);
+            return ResponseEntity.ok(new SimulationController.ApiResponse(true, "获取成功", pedestrianData));
+        } catch (Exception e) {
+            logger.error("获取指定仿真时间的行人数据失败，运行ID: {}, 仿真时间: {}", runId, simTimeStr, e);
+            return ResponseEntity.internalServerError()
+                .body(new SimulationController.ApiResponse(false, "获取数据失败: " + e.getMessage(), null));
+        }
+    }
+
+    /**
      * 统计行人数量
      */
     @GetMapping("/pedestrians/{runId}/count")
@@ -173,6 +197,42 @@ public class DataController {
             logger.error("获取事件类型统计失败，运行ID: {}", runId, e);
             return ResponseEntity.internalServerError()
                 .body(new SimulationController.ApiResponse(false, "统计失败: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * 批量处理所有没有经纬度信息的行人数据
+     */
+    @PostMapping("/pedestrians/convert-all")
+    public ResponseEntity<?> convertAllPedestrianData() {
+        logger.info("开始批量转换所有行人数据的经纬度...");
+        
+        try {
+            int processedCount = coordinateConversionService.processAllPedestrianDataWithoutLatLon();
+            return ResponseEntity.ok(new SimulationController.ApiResponse(true, 
+                "成功处理 " + processedCount + " 条数据", processedCount));
+        } catch (Exception e) {
+            logger.error("批量转换行人数据失败", e);
+            return ResponseEntity.internalServerError()
+                .body(new SimulationController.ApiResponse(false, "转换失败: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * 处理指定运行ID的行人数据经纬度转换
+     */
+    @PostMapping("/pedestrians/{runId}/convert")
+    public ResponseEntity<?> convertRunPedestrianData(@PathVariable Integer runId) {
+        logger.info("开始转换运行ID {} 的行人数据经纬度...", runId);
+        
+        try {
+            int processedCount = coordinateConversionService.processRunPedestrianData(runId);
+            return ResponseEntity.ok(new SimulationController.ApiResponse(true, 
+                "成功处理运行ID " + runId + " 的 " + processedCount + " 条数据", processedCount));
+        } catch (Exception e) {
+            logger.error("转换运行ID {} 的行人数据失败", runId, e);
+            return ResponseEntity.internalServerError()
+                .body(new SimulationController.ApiResponse(false, "转换失败: " + e.getMessage(), null));
         }
     }
 }

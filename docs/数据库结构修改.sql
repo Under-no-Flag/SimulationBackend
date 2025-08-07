@@ -9,6 +9,10 @@ ADD COLUMN engine_parameters TEXT COMMENT '引擎参数JSON字符串';
 ALTER TABLE simulation_runs 
 ADD COLUMN agent_parameters TEXT COMMENT '智能体参数JSON字符串';
 
+-- 添加模型端口字段
+ALTER TABLE simulation_runs 
+ADD COLUMN model_port INT COMMENT '模型端口号';
+
 -- 查看表结构确认修改
 DESCRIBE simulation_runs;
 

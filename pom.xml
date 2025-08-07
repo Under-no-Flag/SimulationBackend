@@ -34,22 +34,41 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+            <exclusions>
+                <!-- 排除默认的日志实现 -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
-        <!-- 使用 logback -->
+        <!-- 使用 log4j2 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-logging</artifactId>
+            <artifactId>spring-boot-starter-log4j2</artifactId>
         </dependency>
 
         <!-- MySQL Driver -->
@@ -63,6 +82,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Test Dependencies -->
@@ -70,6 +95,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- H2 Database for testing -->
@@ -86,12 +117,6 @@
             <version>1.0</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/com.anylogic.engine.jar</systemPath>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -100,12 +125,6 @@
             <version>1.0</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/com.anylogic.engine.sa.jar</systemPath>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -114,12 +133,6 @@
             <version>1.0</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/Core.jar</systemPath>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -128,12 +141,6 @@
             <version>1.0</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/model.jar</systemPath>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -142,12 +149,6 @@
             <version>1.0</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/sa/com.anylogic.engine.sa.web.jar</systemPath>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.anylogic</groupId>
@@ -155,12 +156,6 @@
             <version>1.0</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/com.anylogic.engine.datautil.jar</systemPath>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -169,12 +164,6 @@
             <version>1.0</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/com.anylogic.engine.generalization.jar</systemPath>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -183,12 +172,6 @@
             <version>1.0</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/com.anylogic.engine.editorapi.jar</systemPath>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
     </dependencies>
 
@@ -196,6 +179,7 @@
         <plugins>
             <!-- Spring Boot Maven Plugin -->
             <plugin>
+            
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
@@ -286,6 +270,7 @@
                         <!-- 其他工具库 -->
                         <additionalClasspathElement>${project.basedir}/lib/commons-lang3-3.9.jar</additionalClasspathElement>
                         <additionalClasspathElement>${project.basedir}/lib/commons-io-2.15.0.jar</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/lib/slf4j-api-1.7.25.jar</additionalClasspathElement>
                     </additionalClasspathElements>
                 </configuration>
             </plugin>
